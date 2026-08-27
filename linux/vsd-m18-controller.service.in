@@ -1,0 +1,21 @@
+[Unit]
+Description=M18 Foundry controller service
+After=graphical-session.target
+
+[Service]
+Type=simple
+WorkingDirectory=@PROJECT_ROOT@
+ExecStart=@NODE_PATH@ @PROJECT_ROOT@/src/server.js --headless
+Environment=NODE_ENV=production
+Environment=VSD_M18_NO_BROWSER=1
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.config/vsd-m18-controller %h/.local/share/vsd-m18-controller
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+
+[Install]
+WantedBy=default.target

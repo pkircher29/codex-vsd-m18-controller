@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=M18 Foundry
+Comment=Configure and control a VSDinside or Mirabox M18 Stream Dock
+Exec=@PROJECT_ROOT@/scripts/open-controller.sh
+Icon=@PROJECT_ROOT@/assets/m18-foundry.svg
+Terminal=false
+Categories=Utility;Settings;
+StartupNotify=true

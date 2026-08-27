@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "vsdM18": {
+      "title": "VSD M18 Controller",
+      "description": "Inspect, configure, render, and safely trigger a VSDinside or Mirabox M18 Stream Dock.",
+      "cwd": ".",
+      "command": "node",
+      "args": [
+        "./src/mcp-server.js"
+      ]
+    }
+  }
+}

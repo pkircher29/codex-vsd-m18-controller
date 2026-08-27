@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#242522">
+    <meta
+      name="description"
+      content="Configure, test, and apply profiles for an 18-button VSDinside or Mirabox M18 Stream Dock."
+    >
+    <title>M18 Foundry — Stream Dock setup</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/app.js" defer></script>
+  </head>
+
+  <body>
+    <a class="skip-link" href="#main-workspace">Skip to controller workspace</a>
+
+    <header class="masthead">
+      <div class="brand-lockup" aria-label="M18 Foundry">
+        <span class="brand-mark" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </span>
+        <div>
+          <p class="eyebrow">Local control station</p>
+          <p class="brand-name">M18 <span>Foundry</span></p>
+        </div>
+      </div>
+
+      <div class="masthead-meta">
+        <div class="live-link" id="liveLink" data-state="connecting">
+          <span class="live-dot" aria-hidden="true"></span>
+          <span id="liveLinkText">Connecting</span>
+        </div>
+        <span class="meta-divider" aria-hidden="true"></span>
+        <span class="revision-label" id="revisionLabel">Revision —</span>
+      </div>
+    </header>
+
+    <section class="status-rack" aria-label="System status">
+      <article class="status-cell" id="deviceStatusCell" data-tone="neutral">
+        <span class="status-index">01</span>
+        <div>
+          <p class="status-label">Device</p>
+          <p class="status-value" id="deviceStatusValue">Inspecting USB</p>
+          <p class="status-detail" id="deviceStatusDetail">Waiting for controller</p>
+        </div>
+      </article>
+      <article class="status-cell" id="permissionStatusCell" data-tone="neutral">
+        <span class="status-index">02</span>
+        <div>
+          <p class="status-label">Linux access</p>
+          <p class="status-value" id="permissionStatusValue">Not checked</p>
+          <p class="status-detail" id="permissionStatusDetail">hidraw permission</p>
+        </div>
+      </article>
+      <article class="status-cell" id="modeStatusCell" data-tone="neutral">
+        <span class="status-index">03</span>
+        <div>
+          <p class="status-label">Runtime</p>
+          <p class="status-value" id="modeStatusValue">Starting</p>
+          <p class="status-detail" id="modeStatusDetail">Hardware discovery</p>
+        </div>
+      </article>
+    </section>
+
+    <div class="notice-bar" id="recoveryNotice" role="status" hidden>
+      <svg class="icon" aria-hidden="true"><use href="#icon-alert"></use></svg>
+      <p id="recoveryNoticeText"></p>
+      <button class="icon-button" id="dismissRecovery" type="button" aria-label="Dismiss recovery notice">
+        <svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg>
+      </button>
+    </div>
+
+    <main id="main-workspace" class="workspace" aria-busy="true">
+      <div class="loading-panel" id="loadingPanel" role="status">
+        <span class="loader-track" aria-hidden="true"><span></span></span>
+        <div>
+          <p class="eyebrow">Opening local station</p>
+          <p class="loading-title">Reading M18 configuration…</p>
+        </div>
+      </div>
+
+      <section class="error-panel" id="errorPanel" aria-labelledby="errorTitle" hidden>
+        <div class="error-glyph" aria-hidden="true">!</div>
+        <div>
+          <p class="eyebrow">Workspace unavailable</p>
+          <h1 id="errorTitle">The local controller did not respond</h1>
+          <p id="errorMessage">Check that M18 Foundry is running, then try again.</p>
+          <button class="button button-primary" id="retryButton" type="button">
+            <svg class="icon" aria-hidden="true"><use href="#icon-retry"></use></svg>
+            Retry connection
+          </button>
+        </div>
+      </section>
+
+      <div class="workspace-grid" id="workspaceGrid" hidden>
+        <aside class="profile-rail panel" aria-labelledby="profilesTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="section-code">A / Profiles</p>
+              <h1 id="profilesTitle">Work sets</h1>
+            </div>
+            <span class="count-badge" id="profileCount" aria-label="0 profiles">00</span>
+          </div>
+
+          <p class="panel-intro">Select the layout you want to edit and send to the dock.</p>
+
+          <nav aria-label="Profiles">
+            <ul class="profile-list" id="profileList"></ul>
+          </nav>
+
+          <div class="profile-actions" aria-label="Profile actions">
+            <button class="button button-primary button-block" id="newProfileButton" type="button" data-mutation>
+              <svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg>
+              New profile
+            </button>
+            <div class="split-actions">
+              <button class="button button-quiet" id="duplicateProfileButton" type="button" data-mutation>
+                <svg class="icon" aria-hidden="true"><use href="#icon-copy"></use></svg>
+                Duplicate
+              </button>
+              <button class="button button-danger-quiet" id="deleteProfileButton" type="button" data-mutation>
+                <svg class="icon" aria-hidden="true"><use href="#icon-trash"></use></svg>
+                Delete
+              </button>
+            </div>
+          </div>
+
+          <div class="rail-footnote">
+            <span class="rail-rule" aria-hidden="true"></span>
+            <p><strong>18 inputs</strong><br>15 LCD keys + 3 chassis buttons</p>
+          </div>
+        </aside>
+
+        <section class="deck-workspace panel" aria-labelledby="deckTitle">
+          <div class="deck-heading">
+            <div>
+              <p class="section-code">B / Layout bench</p>
+              <h1 id="deckTitle">M18 faceplate</h1>
+              <p class="active-profile-line">
+                Editing <strong id="activeProfileName">—</strong>
+                <span class="draft-flag" id="draftFlag" hidden>Unsaved</span>
+              </p>
+            </div>
+            <div class="deck-heading-actions">
+              <button class="button button-quiet" id="saveButton" type="button" data-mutation disabled>
+                <svg class="icon" aria-hidden="true"><use href="#icon-save"></use></svg>
+                Save
+              </button>
+              <button class="button button-primary" id="applyButton" type="button" data-mutation>
+                <svg class="icon" aria-hidden="true"><use href="#icon-send"></use></svg>
+                Apply to M18
+              </button>
+            </div>
+          </div>
+
+          <div class="operation-strip" id="operationStrip" data-state="idle" aria-live="polite">
+            <div class="operation-copy">
+              <span class="operation-indicator" aria-hidden="true"></span>
+              <span id="operationText">Ready to configure</span>
+            </div>
+            <progress id="operationProgress" max="15" value="0" hidden>0 of 15</progress>
+          </div>
+
+          <div class="machine-stage">
+            <div class="device-shell" aria-label="Interactive M18 button layout">
+              <span class="shell-screw shell-screw-tl" aria-hidden="true"></span>
+              <span class="shell-screw shell-screw-tr" aria-hidden="true"></span>
+              <span class="shell-screw shell-screw-bl" aria-hidden="true"></span>
+              <span class="shell-screw shell-screw-br" aria-hidden="true"></span>
+
+              <div class="device-rail" aria-hidden="true">
+                <span>M18 / 5×3</span>
+                <span>LCD MATRIX</span>
+              </div>
+
+              <div class="lcd-grid" id="lcdGrid" role="group" aria-label="LCD keys 1 through 15"></div>
+
+              <div class="hardware-divider" aria-hidden="true">
+                <span></span>
+                <small>Chassis controls</small>
+                <span></span>
+              </div>
+
+              <div class="hardware-grid" id="hardwareGrid" role="group" aria-label="Hardware buttons 16 through 18"></div>
+
+              <div class="device-signature" aria-hidden="true">
+                <span>VSD / MIRABOX</span>
+                <span class="signature-bars"><i></i><i></i><i></i><i></i><i></i></span>
+                <span>LOCAL BUS</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="test-bench" aria-labelledby="testBenchTitle">
+            <div>
+              <p class="section-code" id="testBenchTitle">Bench test</p>
+              <p class="test-selection">Selected: <strong id="testSelection">Key —</strong></p>
+            </div>
+            <div class="test-actions">
+              <button class="button button-quiet" id="simulateButton" type="button" data-mutation>
+                <svg class="icon" aria-hidden="true"><use href="#icon-pulse"></use></svg>
+                Simulate input
+              </button>
+              <button class="button button-dark" id="triggerButton" type="button" data-mutation>
+                <svg class="icon" aria-hidden="true"><use href="#icon-play"></use></svg>
+                Test action
+              </button>
+            </div>
+          </div>
+
+          <section class="event-readout" aria-labelledby="eventTitle">
+            <div class="event-heading">
+              <p class="section-code" id="eventTitle">Last signal</p>
+              <time id="eventTime" datetime="">No input yet</time>
+            </div>
+            <p id="eventText">Press a hardware key or use the simulator to inspect the signal path.</p>
+          </section>
+        </section>
+
+        <aside class="inspector panel" aria-labelledby="inspectorTitle">
+          <div class="panel-heading inspector-heading">
+            <div>
+              <p class="section-code">C / Key inspector</p>
+              <h1 id="inspectorTitle">Key <span id="selectedKeyNumber">01</span></h1>
+            </div>
+            <span class="key-kind" id="selectedKeyKind">LCD</span>
+          </div>
+
+          <form id="keyForm" novalidate>
+            <div class="inspector-preview" id="inspectorPreview" aria-hidden="true">
+              <img id="previewImage" alt="" hidden>
+              <span id="previewInitial">01</span>
+              <strong id="previewLabel">KEY 1</strong>
+            </div>
+
+            <div class="form-section">
+              <div class="field-heading">
+                <span class="field-index">01</span>
+                <h2>Appearance</h2>
+              </div>
+
+              <label class="field" for="keyLabel">
+                <span class="field-label">Label</span>
+                <input id="keyLabel" name="label" type="text" maxlength="32" autocomplete="off">
+                <span class="field-hint"><span id="labelCount">0</span>/32 characters</span>
+              </label>
+
+              <fieldset class="field color-field">
+                <legend class="field-label">Key color</legend>
+                <div class="color-control">
+                  <input id="keyColor" name="color" type="color" value="#C47A32" aria-label="Choose key color">
+                  <label for="keyColorText" class="visually-hidden">Hex color</label>
+                  <input
+                    id="keyColorText"
+                    name="colorText"
+                    type="text"
+                    value="#C47A32"
+                    maxlength="7"
+                    inputmode="text"
+                    spellcheck="false"
+                    pattern="#[0-9A-Fa-f]{6}"
+                  >
+                </div>
+                <p class="field-error" id="colorError"></p>
+              </fieldset>
+
+              <fieldset class="field image-field" id="imageField">
+                <legend class="field-label">LCD image</legend>
+                <div class="asset-row">
+                  <label class="upload-button" for="imageUpload">
+                    <svg class="icon" aria-hidden="true"><use href="#icon-upload"></use></svg>
+                    <span>Choose image</span>
+                  </label>
+                  <input
+                    class="visually-hidden"
+                    id="imageUpload"
+                    name="image"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                  >
+                  <button class="button button-quiet button-compact" id="removeImageButton" type="button">
+                    Remove
+                  </button>
+                </div>
+                <p class="field-hint" id="imageHint">PNG, JPEG, WebP, or GIF · 2 MB maximum</p>
+              </fieldset>
+            </div>
+
+            <div class="form-section">
+              <div class="field-heading">
+                <span class="field-index">02</span>
+                <h2>Action</h2>
+              </div>
+
+              <label class="field" for="actionType">
+                <span class="field-label">On press</span>
+                <select id="actionType" name="actionType">
+                  <option value="none">No action</option>
+                  <option value="command">Run command</option>
+                  <option value="url">Open URL</option>
+                  <option value="profile">Switch profile</option>
+                </select>
+              </label>
+
+              <div class="action-empty" id="noneFields">
+                <svg class="icon" aria-hidden="true"><use href="#icon-idle"></use></svg>
+                <p>This key changes no software state. Its press will still appear in the signal readout.</p>
+              </div>
+
+              <div id="commandFields" hidden>
+                <label class="field" for="commandExecutable">
+                  <span class="field-label">Executable</span>
+                  <input
+                    id="commandExecutable"
+                    name="commandExecutable"
+                    type="text"
+                    maxlength="1024"
+                    autocomplete="off"
+                    spellcheck="false"
+                    placeholder="/usr/bin/gnome-terminal"
+                  >
+                  <span class="field-hint">Use a full path when possible. Commands do not run through a shell.</span>
+                </label>
+                <label class="field" for="commandArgs">
+                  <span class="field-label">Arguments</span>
+                  <textarea
+                    id="commandArgs"
+                    name="commandArgs"
+                    rows="4"
+                    maxlength="8192"
+                    spellcheck="false"
+                    placeholder="--new-window&#10;--working-directory=/home/paul"
+                  ></textarea>
+                  <span class="field-hint">One argument per line.</span>
+                </label>
+              </div>
+
+              <div id="urlFields" hidden>
+                <label class="field" for="actionUrl">
+                  <span class="field-label">Web address</span>
+                  <input
+                    id="actionUrl"
+                    name="actionUrl"
+                    type="url"
+                    maxlength="4096"
+                    inputmode="url"
+                    autocomplete="url"
+                    placeholder="https://example.com"
+                  >
+                  <span class="field-hint">Only HTTP and HTTPS addresses are accepted.</span>
+                </label>
+              </div>
+
+              <div id="profileFields" hidden>
+                <label class="field" for="targetProfile">
+                  <span class="field-label">Target profile</span>
+                  <select id="targetProfile" name="targetProfile"></select>
+                </label>
+              </div>
+
+              <p class="form-error" id="actionError" role="alert"></p>
+            </div>
+          </form>
+
+          <form class="device-controls" id="deviceControlsForm" novalidate>
+            <div class="field-heading">
+              <span class="field-index">03</span>
+              <h2>Live hardware</h2>
+            </div>
+
+            <label class="field range-field" for="brightnessRange">
+              <span class="range-label">
+                <span class="field-label">LCD brightness</span>
+                <output id="brightnessOutput" for="brightnessRange">72%</output>
+              </span>
+              <input id="brightnessRange" name="brightness" type="range" min="0" max="100" step="1" value="72">
+              <span class="range-scale" aria-hidden="true"><i>0</i><i>50</i><i>100</i></span>
+            </label>
+
+            <fieldset class="field color-field">
+              <legend class="field-label">Chassis LED</legend>
+              <div class="color-control">
+                <input id="ledColor" name="ledColor" type="color" value="#E59B3A" aria-label="Choose chassis LED color">
+                <label for="ledColorText" class="visually-hidden">LED hex color</label>
+                <input
+                  id="ledColorText"
+                  name="ledColorText"
+                  type="text"
+                  value="#E59B3A"
+                  maxlength="7"
+                  pattern="#[0-9A-Fa-f]{6}"
+                  spellcheck="false"
+                >
+              </div>
+            </fieldset>
+
+            <button class="button button-dark button-block" type="submit" data-mutation>
+              <svg class="icon" aria-hidden="true"><use href="#icon-adjust"></use></svg>
+              Update hardware
+            </button>
+          </form>
+        </aside>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <p>M18 Foundry <span aria-hidden="true">/</span> local-only control plane</p>
+      <p>Changes stay in draft until saved or applied.</p>
+    </footer>
+
+    <dialog class="modal" id="profileDialog" aria-labelledby="profileDialogTitle">
+      <form method="dialog" id="profileDialogForm">
+        <div class="modal-index" aria-hidden="true">PF</div>
+        <div class="modal-copy">
+          <p class="section-code">Profile operation</p>
+          <h2 id="profileDialogTitle">Create profile</h2>
+          <p id="profileDialogDescription">Start with a clean 18-button layout.</p>
+        </div>
+        <label class="field" for="profileName">
+          <span class="field-label">Profile name</span>
+          <input id="profileName" name="profileName" type="text" maxlength="64" required autocomplete="off">
+          <span class="field-hint">1–64 characters</span>
+        </label>
+        <p class="form-error" id="profileDialogError" role="alert"></p>
+        <div class="modal-actions">
+          <button class="button button-quiet" type="button" id="cancelProfileDialog">Cancel</button>
+          <button class="button button-primary" type="submit" id="submitProfileDialog" data-mutation>Create</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal modal-confirm" id="confirmDialog" aria-labelledby="confirmDialogTitle">
+      <form method="dialog">
+        <div class="modal-index" id="confirmDialogIndex" aria-hidden="true">!</div>
+        <div class="modal-copy">
+          <p class="section-code" id="confirmDialogKicker">Confirm operation</p>
+          <h2 id="confirmDialogTitle">Continue?</h2>
+          <p id="confirmDialogMessage"></p>
+        </div>
+        <div class="modal-actions">
+          <button class="button button-quiet" value="cancel">Cancel</button>
+          <button class="button button-primary" id="confirmDialogButton" value="confirm">Continue</button>
+        </div>
+      </form>
+    </dialog>
+
+    <section class="toast-region" id="toastRegion" aria-label="Notifications" aria-live="polite"></section>
+
+    <svg class="svg-sprite" aria-hidden="true" focusable="false">
+      <symbol id="icon-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="icon-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="1"/><path d="M16 8V5H5v11h3"/></symbol>
+      <symbol id="icon-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 3h6l1 4H8l1-4Zm-2 4 1 14h8l1-14M10 11v6m4-6v6"/></symbol>
+      <symbol id="icon-save" viewBox="0 0 24 24"><path d="M5 3h12l2 2v16H5V3Zm3 0v6h8V3M8 21v-8h8v8"/></symbol>
+      <symbol id="icon-send" viewBox="0 0 24 24"><path d="m3 4 18 8-18 8 4-8-4-8Zm4 8h14"/></symbol>
+      <symbol id="icon-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2-7 4 14 2-7h6"/></symbol>
+      <symbol id="icon-play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7V5Z"/></symbol>
+      <symbol id="icon-upload" viewBox="0 0 24 24"><path d="M12 16V3m0 0L7 8m5-5 5 5M4 14v7h16v-7"/></symbol>
+      <symbol id="icon-idle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M8 12h8"/></symbol>
+      <symbol id="icon-adjust" viewBox="0 0 24 24"><path d="M4 7h8m4 0h4M4 17h4m4 0h8M12 4v6M8 14v6"/><circle cx="12" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></symbol>
+      <symbol id="icon-alert" viewBox="0 0 24 24"><path d="m12 3 9 17H3L12 3Zm0 6v5m0 3v.5"/></symbol>
+      <symbol id="icon-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+      <symbol id="icon-retry" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5m10-2a8 8 0 0 0-14-3l-1 2m1 5a8 8 0 0 0 14 3l1-2"/></symbol>
+    </svg>
+  </body>
+</html>

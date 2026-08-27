@@ -1,0 +1,10 @@
+interface:
+  display_name: "VSD M18 Control"
+  short_description: "Configure and control VSD M18 stream docks"
+  default_prompt: "Use $vsd-m18-control to inspect my dock and configure its active profile safely."
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "vsdM18"
+      description: "Local VSD M18 controller and profile service"
+      transport: "stdio"

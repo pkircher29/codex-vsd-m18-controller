@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">M18 Foundry</title>
+  <rect width="256" height="256" rx="52" fill="#171A17"/>
+  <path d="M42 72c0-16.6 13.4-30 30-30h112c16.6 0 30 13.4 30 30v112c0 16.6-13.4 30-30 30H72c-16.6 0-30-13.4-30-30V72Z" fill="#242923" stroke="#E59B3A" stroke-width="7"/>
+  <g fill="#E9E4D8">
+    <rect x="64" y="66" width="30" height="30" rx="6"/>
+    <rect x="113" y="66" width="30" height="30" rx="6"/>
+    <rect x="162" y="66" width="30" height="30" rx="6"/>
+    <rect x="64" y="113" width="30" height="30" rx="6"/>
+    <rect x="113" y="113" width="30" height="30" rx="6"/>
+    <rect x="162" y="113" width="30" height="30" rx="6"/>
+  </g>
+  <path d="M71 176h114" stroke="#E59B3A" stroke-width="13" stroke-linecap="round"/>
+</svg>

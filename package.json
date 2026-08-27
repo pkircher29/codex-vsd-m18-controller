@@ -1,0 +1,31 @@
+{
+  "name": "codex-vsd-m18-controller",
+  "version": "0.1.0",
+  "description": "Linux setup and automation controller for VSDinside and Mirabox M18 Stream Docks",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "demo": "VSD_M18_MODE=mock node src/server.js",
+    "mcp": "node src/mcp-server.js",
+    "check": "node scripts/check-syntax.js",
+    "test": "node --test --test-reporter=spec",
+    "verify": "npm run check && npm test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.0.0",
+    "node-hid": "3.4.0",
+    "sharp": "0.35.4",
+    "zod": "4.4.3"
+  },
+  "keywords": [
+    "linux",
+    "mcp",
+    "stream-dock",
+    "vsd-m18"
+  ],
+  "license": "MIT"
+}
