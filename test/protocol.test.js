@@ -68,6 +68,14 @@ test("rendered LCD artwork is native 64x64 JPEG with a JFIF APP0 marker", async 
   const metadata = await sharp(jpeg).metadata();
   assert.equal(metadata.width, 64);
   assert.equal(metadata.height, 64);
+  const { data: sample } = await sharp(jpeg)
+    .extract({ left: 16, top: 16, width: 1, height: 1 })
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  assert.ok(sample[0] > 150, `expected a red/orange key face, received R=${sample[0]}`);
+  assert.ok(sample[1] > 65 && sample[1] < 165, `expected the configured green channel, received G=${sample[1]}`);
+  assert.ok(sample[2] < 105, `expected the configured blue channel, received B=${sample[2]}`);
 });
 
 class RecordingHandle extends EventEmitter {

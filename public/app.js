@@ -62,6 +62,7 @@ const elements = {
   deleteProfileButton: byId("deleteProfileButton"),
   activeProfileName: byId("activeProfileName"),
   draftFlag: byId("draftFlag"),
+  aiLayoutButton: byId("aiLayoutButton"),
   saveButton: byId("saveButton"),
   applyButton: byId("applyButton"),
   operationStrip: byId("operationStrip"),
@@ -90,6 +91,8 @@ const elements = {
   imageUpload: byId("imageUpload"),
   removeImageButton: byId("removeImageButton"),
   imageHint: byId("imageHint"),
+  shortcutFile: byId("shortcutFile"),
+  pasteCommandButton: byId("pasteCommandButton"),
   actionType: byId("actionType"),
   noneFields: byId("noneFields"),
   commandFields: byId("commandFields"),
@@ -113,6 +116,31 @@ const elements = {
   profileDialogError: byId("profileDialogError"),
   submitProfileDialog: byId("submitProfileDialog"),
   cancelProfileDialog: byId("cancelProfileDialog"),
+  aiDialog: byId("aiDialog"),
+  aiDialogForm: byId("aiDialogForm"),
+  aiProvider: byId("aiProvider"),
+  aiEndpointField: byId("aiEndpointField"),
+  aiEndpoint: byId("aiEndpoint"),
+  aiApiKeyField: byId("aiApiKeyField"),
+  aiApiKey: byId("aiApiKey"),
+  aiModel: byId("aiModel"),
+  aiModelList: byId("aiModelList"),
+  aiModelHint: byId("aiModelHint"),
+  loadModelsButton: byId("loadModelsButton"),
+  aiPrompt: byId("aiPrompt"),
+  aiDialogError: byId("aiDialogError"),
+  aiPreview: byId("aiPreview"),
+  aiPreviewSummary: byId("aiPreviewSummary"),
+  aiPreviewGrid: byId("aiPreviewGrid"),
+  cancelAiDialog: byId("cancelAiDialog"),
+  generateAiLayoutButton: byId("generateAiLayoutButton"),
+  acceptAiLayoutButton: byId("acceptAiLayoutButton"),
+  pasteDialog: byId("pasteDialog"),
+  pasteDialogForm: byId("pasteDialogForm"),
+  pasteDialogKey: byId("pasteDialogKey"),
+  pastedCommand: byId("pastedCommand"),
+  pasteDialogError: byId("pasteDialogError"),
+  cancelPasteDialog: byId("cancelPasteDialog"),
   confirmDialog: byId("confirmDialog"),
   confirmDialogIndex: byId("confirmDialogIndex"),
   confirmDialogKicker: byId("confirmDialogKicker"),
@@ -120,6 +148,10 @@ const elements = {
   confirmDialogMessage: byId("confirmDialogMessage"),
   confirmDialogButton: byId("confirmDialogButton"),
   toastRegion: byId("toastRegion"),
+  keyContextMenu: byId("keyContextMenu"),
+  contextPasteCommand: byId("contextPasteCommand"),
+  contextChooseShortcut: byId("contextChooseShortcut"),
+  contextClearAction: byId("contextClearAction"),
 };
 
 const ui = {
@@ -134,6 +166,12 @@ const ui = {
   liveState: "connecting",
   profileDialogMode: "create",
   dialogOpener: null,
+  aiDialogOpener: null,
+  pasteDialogOpener: null,
+  aiProposal: null,
+  aiBusy: false,
+  pasteTargetKey: 1,
+  contextKey: null,
   confirmResolver: null,
   confirmOpener: null,
   lastRenderedEventId: "",
@@ -254,6 +292,19 @@ function padKey(index) {
 
 function normalizeColor(color, fallback = "#C47A32") {
   return HEX_COLOR.test(String(color || "")) ? String(color).toUpperCase() : fallback;
+}
+
+function keyTextColor(color) {
+  const clean = normalizeColor(color).slice(1);
+  const channels = [0, 2, 4].map((offset) => Number.parseInt(clean.slice(offset, offset + 2), 16) / 255);
+  const [red, green, blue] = channels.map((channel) =>
+    channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
+  );
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue > 0.179 ? "#000000" : "#FFFFFF";
+}
+
+function keyTextShadow(color) {
+  return keyTextColor(color) === "#FFFFFF" ? "0 1px 2px rgb(0 0 0 / 82%)" : "none";
 }
 
 function assetUrl(assetId) {
@@ -642,8 +693,13 @@ function createDeckButton(key) {
   button.type = "button";
   button.className = `deck-key ${key.index <= 15 ? "lcd-key" : "hardware-key"}`;
   button.dataset.key = String(key.index);
-  button.style.setProperty("--key-color", normalizeColor(key.color));
+  const keyColor = normalizeColor(key.color);
+  button.style.setProperty("--key-color", keyColor);
+  button.style.setProperty("--key-text", keyTextColor(keyColor));
+  button.style.setProperty("--key-shadow", keyTextShadow(keyColor));
+  if (key.index <= 15) button.style.backgroundColor = keyColor;
   button.setAttribute("aria-pressed", String(key.index === ui.selectedKey));
+  button.setAttribute("aria-describedby", "dropGuidance");
   button.setAttribute(
     "aria-label",
     `Key ${key.index}, ${key.label || "unlabeled"}. ${actionText}. Select for editing.`,
@@ -651,6 +707,8 @@ function createDeckButton(key) {
   button.title = `Key ${key.index} · ${actionText}`;
   if (key.assetId && key.index <= 15) {
     button.classList.add("has-image");
+    button.style.setProperty("--key-text", "#FFFFFF");
+    button.style.setProperty("--key-shadow", "0 1px 2px rgb(0 0 0 / 82%)");
     button.style.backgroundImage = `url("${assetUrl(key.assetId)}")`;
   }
 
@@ -666,10 +724,24 @@ function createDeckButton(key) {
   button.append(number, label, action);
   button.addEventListener("click", () => selectKey(key.index));
   button.addEventListener("keydown", handleDeckNavigation);
+  button.addEventListener("contextmenu", (event) => openKeyContextMenu(event, key.index));
+  button.addEventListener("dragenter", handleKeyDragEnter);
+  button.addEventListener("dragover", handleKeyDragOver);
+  button.addEventListener("dragleave", handleKeyDragLeave);
+  button.addEventListener("drop", (event) => handleKeyDrop(event, key.index));
   return button;
 }
 
 function handleDeckNavigation(event) {
+  if ((event.shiftKey && event.key === "F10") || event.key === "ContextMenu") {
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    openKeyContextMenu(
+      { preventDefault() {}, clientX: rect.left + Math.min(28, rect.width / 2), clientY: rect.top + Math.min(28, rect.height / 2) },
+      Number(event.currentTarget.dataset.key),
+    );
+    return;
+  }
   if (!new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"]).has(event.key)) {
     return;
   }
@@ -702,6 +774,139 @@ function handleDeckNavigation(event) {
   }
 }
 
+function openKeyContextMenu(event, keyIndex) {
+  event.preventDefault();
+  selectKey(keyIndex);
+  ui.contextKey = keyIndex;
+  const menu = elements.keyContextMenu;
+  menu.hidden = false;
+  const width = menu.offsetWidth;
+  const height = menu.offsetHeight;
+  const left = Math.max(8, Math.min(event.clientX, window.innerWidth - width - 8));
+  const top = Math.max(8, Math.min(event.clientY, window.innerHeight - height - 8));
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+  requestAnimationFrame(() => menu.querySelector("button")?.focus());
+}
+
+function closeKeyContextMenu({ restoreFocus = false } = {}) {
+  if (elements.keyContextMenu.hidden) return;
+  const key = ui.contextKey;
+  elements.keyContextMenu.hidden = true;
+  ui.contextKey = null;
+  if (restoreFocus && key) {
+    requestAnimationFrame(() => document.querySelector(`.deck-key[data-key="${key}"]`)?.focus());
+  }
+}
+
+function isSupportedDrop(event) {
+  const types = new Set(event.dataTransfer?.types || []);
+  return types.has("Files") || types.has("text/plain") || types.has("text/uri-list");
+}
+
+function handleKeyDragEnter(event) {
+  if (!isSupportedDrop(event)) return;
+  event.preventDefault();
+  event.currentTarget.classList.add("is-drop-target");
+}
+
+function handleKeyDragOver(event) {
+  if (!isSupportedDrop(event)) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "copy";
+  event.currentTarget.classList.add("is-drop-target");
+}
+
+function handleKeyDragLeave(event) {
+  if (event.currentTarget.contains(event.relatedTarget)) return;
+  event.currentTarget.classList.remove("is-drop-target");
+}
+
+async function stageImageFile(file, targetKey) {
+  if (!IMAGE_TYPES.has(file.type)) {
+    throw new UiValidationError("Choose a PNG, JPEG, WebP, or GIF file");
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    throw new UiValidationError("Choose an image no larger than 2 MB");
+  }
+  if (targetKey > 15) throw new UiValidationError("Only LCD keys 1 through 15 accept images");
+  const response = await apiRequest("/api/assets", {
+    method: "POST",
+    body: file,
+    headers: { "Content-Type": file.type },
+  });
+  const asset = response?.asset;
+  const assetId = typeof asset === "string" ? asset : asset?.id;
+  if (!assetId) throw new Error("The controller did not return an image identifier");
+  const key = activeProfile()?.keys[targetKey - 1];
+  if (!key) throw new Error("The target key is missing");
+  key.assetId = assetId;
+  markDirty();
+  ui.selectedKey = targetKey;
+  renderDeck();
+  renderInspector();
+  renderRevision();
+  renderOperation();
+  renderControlAvailability();
+  showToast({
+    tone: "success",
+    title: "Image staged",
+    message: `${asset?.width || "Image"}×${asset?.height || "?"} source assigned to key ${padKey(targetKey)}. Save or apply to keep it.`,
+  });
+}
+
+function stageResolvedShortcut(shortcut, targetKey) {
+  const key = activeProfile()?.keys[targetKey - 1];
+  if (!key) throw new Error("The target key is missing");
+  key.label = String(shortcut?.label || key.label || "Shortcut").slice(0, 32);
+  key.action = clone(shortcut?.action || { type: "none" });
+  markDirty();
+  ui.selectedKey = targetKey;
+  renderDeck();
+  renderInspector();
+  renderRevision();
+  renderOperation();
+  renderControlAvailability();
+  showToast({
+    tone: "success",
+    title: "Shortcut staged",
+    message: `${actionLabel(key.action)} assigned to key ${padKey(targetKey)}. Review it, then save or apply.`,
+  });
+}
+
+async function resolveAndStageShortcut({ targetKey, name = "Shortcut", content = "", source = "" }) {
+  const response = await apiRequest("/api/shortcuts/resolve", {
+    method: "POST",
+    json: { name, content, source },
+  });
+  if (!response?.shortcut) throw new Error("The controller could not read that shortcut");
+  stageResolvedShortcut(response.shortcut, targetKey);
+}
+
+async function stageDroppedFile(file, targetKey, source = "") {
+  if (IMAGE_TYPES.has(file.type)) return stageImageFile(file, targetKey);
+  if (/\.(sh|command)$/i.test(file.name) && !source) {
+    throw new UiValidationError("Drag the installed app shortcut or executable path, not a copied script file");
+  }
+  const content = file.size <= 256 * 1024 ? await file.text() : "";
+  return resolveAndStageShortcut({ targetKey, name: file.name, content, source });
+}
+
+function handleKeyDrop(event, keyIndex) {
+  event.preventDefault();
+  event.currentTarget.classList.remove("is-drop-target");
+  const transfer = event.dataTransfer;
+  const file = transfer?.files?.[0] || null;
+  const uri = transfer?.getData("text/uri-list")?.split(/\r?\n/).find((line) => line && !line.startsWith("#")) || "";
+  const plain = transfer?.getData("text/plain") || "";
+  runMutation("Reading dropped shortcut", async () => {
+    if (file) return stageDroppedFile(file, keyIndex, uri.startsWith("file:") ? uri : "");
+    const value = uri || plain;
+    if (!value) throw new UiValidationError("Drop a shortcut, image, web address, or command onto the key");
+    return resolveAndStageShortcut({ targetKey: keyIndex, name: "Dropped shortcut", content: value, source: value });
+  });
+}
+
 function renderInspector() {
   const key = selectedKeyConfig();
   if (!key) return;
@@ -711,6 +916,11 @@ function renderInspector() {
   elements.selectedKeyNumber.textContent = padKey(key.index);
   elements.selectedKeyKind.textContent = isLcd ? "LCD" : "CHASSIS";
   elements.inspectorPreview.style.setProperty("--key-color", color);
+  elements.inspectorPreview.style.setProperty("--key-text", isLcd && key.assetId ? "#FFFFFF" : keyTextColor(color));
+  elements.inspectorPreview.style.setProperty(
+    "--key-shadow",
+    isLcd && key.assetId ? "0 1px 2px rgb(0 0 0 / 82%)" : keyTextShadow(color),
+  );
   elements.previewInitial.textContent = padKey(key.index);
   elements.previewLabel.textContent = key.label || "UNLABELED";
   elements.keyLabel.value = key.label || "";
@@ -890,6 +1100,9 @@ function renderControlAvailability() {
   elements.duplicateProfileButton.disabled = busy || !hasProfile || ui.stale;
   elements.deleteProfileButton.disabled = busy || profiles.length <= 1 || !hasProfile || ui.stale;
   elements.newProfileButton.disabled = busy || profiles.length >= 50 || ui.stale;
+  elements.aiLayoutButton.disabled = busy || !hasProfile || ui.stale;
+  elements.shortcutFile.disabled = busy || !hasProfile || ui.stale;
+  elements.pasteCommandButton.disabled = busy || !hasProfile || ui.stale;
   elements.workspace.setAttribute("aria-busy", String(busy));
   document.body.classList.toggle("is-busy", busy);
 }
@@ -1236,6 +1449,213 @@ function showToast({ tone = "info", title, message, duration = 6000 }) {
   startTimer();
 }
 
+function aiProviderPayload() {
+  return {
+    provider: elements.aiProvider.value,
+    baseUrl: elements.aiEndpoint.value.trim(),
+    apiKey: elements.aiApiKey.value,
+  };
+}
+
+function renderAiProvider() {
+  const provider = elements.aiProvider.value;
+  const usesEndpoint = new Set(["ollama", "openai-compatible"]).has(provider);
+  elements.aiEndpointField.hidden = !usesEndpoint;
+  elements.aiApiKeyField.hidden = provider === "ollama";
+  if (provider === "ollama" && (!/^https?:\/\//i.test(elements.aiEndpoint.value) || elements.aiEndpoint.value.includes(":1234"))) {
+    elements.aiEndpoint.value = "http://127.0.0.1:11434";
+  }
+  if (provider === "openai-compatible" && (!/^https?:\/\//i.test(elements.aiEndpoint.value) || elements.aiEndpoint.value.includes(":11434"))) {
+    elements.aiEndpoint.value = "http://127.0.0.1:1234/v1";
+  }
+  elements.aiModelList.replaceChildren();
+  elements.aiModel.value = "";
+  elements.aiModelHint.textContent = "Connect to the provider to see models available to this account or local server.";
+  elements.aiDialogError.textContent = "";
+}
+
+function setAiBusy(busy, message = "") {
+  ui.aiBusy = busy;
+  elements.aiDialogForm.setAttribute("aria-busy", String(busy));
+  elements.loadModelsButton.disabled = busy;
+  elements.generateAiLayoutButton.disabled = busy;
+  elements.acceptAiLayoutButton.disabled = busy || !ui.aiProposal;
+  if (message) elements.aiModelHint.textContent = message;
+}
+
+function openAiDialog() {
+  if (!activeProfile()) return;
+  ui.aiDialogOpener = document.activeElement;
+  ui.aiProposal = null;
+  elements.aiDialogError.textContent = "";
+  elements.aiPreview.hidden = true;
+  elements.aiPreviewGrid.replaceChildren();
+  elements.acceptAiLayoutButton.disabled = true;
+  elements.aiDialog.returnValue = "";
+  elements.aiDialog.showModal();
+  renderAiProvider();
+  requestAnimationFrame(() => elements.aiProvider.focus());
+}
+
+function closeAiDialog() {
+  if (ui.aiBusy) return;
+  if (elements.aiDialog.open) elements.aiDialog.close("cancel");
+}
+
+function renderAiPreview(proposal) {
+  const fragment = document.createDocumentFragment();
+  for (const key of proposal.layout.keys) {
+    const tile = document.createElement("article");
+    const number = document.createElement("span");
+    const label = document.createElement("strong");
+    const action = document.createElement("small");
+    const color = normalizeColor(key.color);
+    tile.className = `ai-preview-key${key.index > 15 ? " ai-preview-key-hardware" : ""}`;
+    tile.style.setProperty("--key-color", color);
+    tile.style.setProperty("--key-text", keyTextColor(color));
+    number.textContent = padKey(key.index);
+    label.textContent = key.label || "UNLABELED";
+    action.textContent = actionLabel(key.action);
+    tile.append(number, label, action);
+    fragment.append(tile);
+  }
+  elements.aiPreviewSummary.textContent = proposal.layout.summary;
+  elements.aiPreviewGrid.replaceChildren(fragment);
+  elements.aiPreview.hidden = false;
+  elements.acceptAiLayoutButton.disabled = false;
+  elements.aiPreview.scrollIntoView({ block: "nearest" });
+}
+
+async function loadAiModels() {
+  elements.aiDialogError.textContent = "";
+  setAiBusy(true, "Loading models from the provider…");
+  try {
+    const response = await apiRequest("/api/ai/models", {
+      method: "POST",
+      json: aiProviderPayload(),
+    });
+    const models = Array.isArray(response?.models) ? response.models : [];
+    if (!models.length) throw new Error("The provider returned no text-generation models. You can enter a model ID manually.");
+    const fragment = document.createDocumentFragment();
+    for (const model of models) {
+      const option = document.createElement("option");
+      option.value = model;
+      fragment.append(option);
+    }
+    elements.aiModelList.replaceChildren(fragment);
+    if (!elements.aiModel.value) elements.aiModel.value = models[0];
+    elements.aiModelHint.textContent = `${models.length} available model${models.length === 1 ? "" : "s"} loaded. You can still enter another model ID.`;
+  } catch (error) {
+    elements.aiDialogError.textContent = error?.message || "Models could not be loaded.";
+    elements.aiModelHint.textContent = "Model discovery failed; correct the connection or enter a model ID manually.";
+  } finally {
+    setAiBusy(false);
+  }
+}
+
+async function generateAiLayout() {
+  const model = elements.aiModel.value.trim();
+  const prompt = elements.aiPrompt.value.trim();
+  if (!model) {
+    elements.aiDialogError.textContent = "Load or enter a model ID.";
+    elements.aiModel.focus();
+    return;
+  }
+  if (!prompt) {
+    elements.aiDialogError.textContent = "Describe what you want the buttons to do.";
+    elements.aiPrompt.focus();
+    return;
+  }
+  elements.aiDialogError.textContent = "";
+  elements.aiPreview.hidden = true;
+  ui.aiProposal = null;
+  setAiBusy(true, "Generating an 18-key draft…");
+  try {
+    const scope = elements.aiDialogForm.elements.aiScope.value === "empty" ? "empty" : "all";
+    const response = await apiRequest("/api/ai/layout", {
+      method: "POST",
+      json: {
+        ...aiProviderPayload(),
+        model,
+        prompt,
+        scope,
+        platform: runtimePlatform().label,
+        profile: activeProfile(),
+      },
+    });
+    if (!response?.layout?.keys) throw new Error("The provider returned an invalid layout response.");
+    ui.aiProposal = { ...response, scope };
+    renderAiPreview(ui.aiProposal);
+    elements.aiModelHint.textContent = `Preview generated with ${response.model || model}. Nothing has been saved or applied.`;
+  } catch (error) {
+    elements.aiDialogError.textContent = error?.message || "The AI layout could not be generated.";
+  } finally {
+    setAiBusy(false);
+  }
+}
+
+function acceptAiLayout() {
+  const proposal = ui.aiProposal;
+  const profile = activeProfile();
+  if (!proposal?.layout?.keys || !profile) return;
+  let changed = 0;
+  for (const generated of proposal.layout.keys) {
+    const key = profile.keys[generated.index - 1];
+    if (!key) continue;
+    if (proposal.scope === "empty" && key.action.type !== "none") continue;
+    key.label = String(generated.label || "").slice(0, 32);
+    key.color = normalizeColor(generated.color);
+    key.action = clone(generated.action || { type: "none" });
+    changed += 1;
+  }
+  if (!changed) {
+    elements.aiDialogError.textContent = "No unassigned keys were available. Choose “Redesign all 18 keys” to replace the current layout.";
+    return;
+  }
+  markDirty();
+  renderAll();
+  elements.aiDialog.close("accepted");
+  showToast({
+    tone: "success",
+    title: "AI layout staged",
+    message: `${changed} key${changed === 1 ? "" : "s"} updated as an unsaved draft. Review every command before applying.`,
+    duration: 9000,
+  });
+}
+
+function openPasteDialog(keyIndex, initialValue = "") {
+  closeKeyContextMenu();
+  ui.pasteDialogOpener = document.querySelector(`.deck-key[data-key="${keyIndex}"]`) || document.activeElement;
+  ui.pasteTargetKey = keyIndex;
+  elements.pasteDialogKey.textContent = padKey(keyIndex);
+  elements.pastedCommand.value = initialValue;
+  elements.pasteDialogError.textContent = "";
+  elements.pasteDialog.returnValue = "";
+  elements.pasteDialog.showModal();
+  requestAnimationFrame(() => elements.pastedCommand.focus());
+}
+
+function closePasteDialog() {
+  if (elements.pasteDialog.open) elements.pasteDialog.close("cancel");
+}
+
+async function pasteCommandForKey(keyIndex) {
+  let text = "";
+  try {
+    text = await navigator.clipboard.readText();
+  } catch {
+    openPasteDialog(keyIndex);
+    return;
+  }
+  if (!text.trim()) {
+    openPasteDialog(keyIndex);
+    return;
+  }
+  runMutation("Staging pasted command", () =>
+    resolveAndStageShortcut({ targetKey: keyIndex, name: "Pasted command", content: text }),
+  );
+}
+
 function flashKey(index) {
   const key = Number(index);
   if (!Number.isInteger(key) || key < 1 || key > 18) return;
@@ -1259,6 +1679,80 @@ function wireEvents() {
   elements.dismissRecovery.addEventListener("click", () => {
     elements.recoveryNotice.dataset.dismissed = ui.serverState?.recoveryNotice || "dismissed";
     elements.recoveryNotice.hidden = true;
+  });
+
+  elements.aiLayoutButton.addEventListener("click", openAiDialog);
+  elements.aiProvider.addEventListener("change", renderAiProvider);
+  elements.loadModelsButton.addEventListener("click", loadAiModels);
+  elements.aiDialogForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    generateAiLayout();
+  });
+  elements.cancelAiDialog.addEventListener("click", closeAiDialog);
+  elements.acceptAiLayoutButton.addEventListener("click", acceptAiLayout);
+  elements.aiDialog.addEventListener("close", () => {
+    ui.aiProposal = null;
+    elements.aiApiKey.value = "";
+    requestAnimationFrame(() => ui.aiDialogOpener?.focus?.());
+    ui.aiDialogOpener = null;
+  });
+
+  elements.pasteCommandButton.addEventListener("click", () => pasteCommandForKey(ui.selectedKey));
+  elements.pasteDialogForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const text = elements.pastedCommand.value.trim();
+    if (!text) {
+      elements.pasteDialogError.textContent = "Paste a command to assign.";
+      elements.pastedCommand.focus();
+      return;
+    }
+    const targetKey = ui.pasteTargetKey;
+    closePasteDialog();
+    runMutation("Staging pasted command", () =>
+      resolveAndStageShortcut({ targetKey, name: "Pasted command", content: text }),
+    );
+  });
+  elements.cancelPasteDialog.addEventListener("click", closePasteDialog);
+  elements.pasteDialog.addEventListener("close", () => {
+    requestAnimationFrame(() => ui.pasteDialogOpener?.focus?.());
+    ui.pasteDialogOpener = null;
+  });
+
+  elements.contextPasteCommand.addEventListener("click", () => {
+    const key = ui.contextKey || ui.selectedKey;
+    closeKeyContextMenu();
+    pasteCommandForKey(key);
+  });
+  elements.contextChooseShortcut.addEventListener("click", () => {
+    const key = ui.contextKey || ui.selectedKey;
+    closeKeyContextMenu();
+    selectKey(key);
+    elements.shortcutFile.click();
+  });
+  elements.contextClearAction.addEventListener("click", () => {
+    const keyIndex = ui.contextKey || ui.selectedKey;
+    closeKeyContextMenu();
+    selectKey(keyIndex);
+    mutateSelectedKey((key) => {
+      key.action = { type: "none" };
+    });
+    renderInspector();
+    showToast({ tone: "success", title: "Action cleared", message: `Key ${padKey(keyIndex)} is now unassigned in the draft.` });
+  });
+  elements.keyContextMenu.addEventListener("keydown", (event) => {
+    const items = [...elements.keyContextMenu.querySelectorAll("button")];
+    const current = items.indexOf(document.activeElement);
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeKeyContextMenu({ restoreFocus: true });
+    } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const direction = event.key === "ArrowDown" ? 1 : -1;
+      items[(current + direction + items.length) % items.length]?.focus();
+    } else if (event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      items[event.key === "Home" ? 0 : items.length - 1]?.focus();
+    }
   });
 
   elements.newProfileButton.addEventListener("click", () => openProfileDialog("create"));
@@ -1443,6 +1937,9 @@ function wireEvents() {
       key.color = color;
     });
     elements.inspectorPreview.style.setProperty("--key-color", color);
+    const hasArtwork = Boolean(selectedKeyConfig()?.assetId && ui.selectedKey <= 15);
+    elements.inspectorPreview.style.setProperty("--key-text", hasArtwork ? "#FFFFFF" : keyTextColor(color));
+    elements.inspectorPreview.style.setProperty("--key-shadow", hasArtwork ? "0 1px 2px rgb(0 0 0 / 82%)" : keyTextShadow(color));
   });
 
   elements.keyColorText.addEventListener("input", () => {
@@ -1458,6 +1955,9 @@ function wireEvents() {
       key.color = color;
     });
     elements.inspectorPreview.style.setProperty("--key-color", color);
+    const hasArtwork = Boolean(selectedKeyConfig()?.assetId && ui.selectedKey <= 15);
+    elements.inspectorPreview.style.setProperty("--key-text", hasArtwork ? "#FFFFFF" : keyTextColor(color));
+    elements.inspectorPreview.style.setProperty("--key-shadow", hasArtwork ? "0 1px 2px rgb(0 0 0 / 82%)" : keyTextShadow(color));
   });
 
   elements.actionType.addEventListener("change", () => {
@@ -1500,45 +2000,20 @@ function wireEvents() {
     });
   });
 
+  elements.shortcutFile.addEventListener("change", () => {
+    const [file] = elements.shortcutFile.files || [];
+    if (!file) return;
+    const targetKey = ui.selectedKey;
+    runMutation("Reading shortcut", () => stageDroppedFile(file, targetKey)).finally(() => {
+      elements.shortcutFile.value = "";
+    });
+  });
+
   elements.imageUpload.addEventListener("change", () => {
     const [file] = elements.imageUpload.files || [];
     if (!file) return;
-    if (!IMAGE_TYPES.has(file.type)) {
-      showToast({ tone: "error", title: "Unsupported image", message: "Choose a PNG, JPEG, WebP, or GIF file." });
-      elements.imageUpload.value = "";
-      return;
-    }
-    if (file.size > MAX_IMAGE_BYTES) {
-      showToast({ tone: "error", title: "Image too large", message: "Choose an image no larger than 2 MB." });
-      elements.imageUpload.value = "";
-      return;
-    }
     const targetKey = ui.selectedKey;
-    runMutation("Uploading key image", async () => {
-      const response = await apiRequest("/api/assets", {
-        method: "POST",
-        body: file,
-        headers: { "Content-Type": file.type },
-      });
-      const asset = response?.asset;
-      const assetId = typeof asset === "string" ? asset : asset?.id;
-      if (!assetId) throw new Error("The controller did not return an image identifier");
-      const key = activeProfile()?.keys[targetKey - 1];
-      if (!key || targetKey > 15) throw new Error("Only LCD keys 1 through 15 accept images");
-      key.assetId = assetId;
-      markDirty();
-      ui.selectedKey = targetKey;
-      renderDeck();
-      renderInspector();
-      renderRevision();
-      renderOperation();
-      renderControlAvailability();
-      showToast({
-        tone: "success",
-        title: "Image staged",
-        message: `${asset?.width || "Image"}×${asset?.height || "?"} source assigned to key ${padKey(targetKey)}. Save or apply to keep it.`,
-      });
-    }).finally(() => {
+    runMutation("Uploading key image", () => stageImageFile(file, targetKey)).finally(() => {
       elements.imageUpload.value = "";
     });
   });
@@ -1622,11 +2097,23 @@ function wireEvents() {
   });
 
   document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !elements.keyContextMenu.hidden) {
+      closeKeyContextMenu({ restoreFocus: true });
+      return;
+    }
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
       event.preventDefault();
       if (!elements.saveButton.disabled) elements.saveButton.click();
     }
   });
+
+  document.addEventListener("pointerdown", (event) => {
+    if (!elements.keyContextMenu.hidden && !elements.keyContextMenu.contains(event.target)) {
+      closeKeyContextMenu();
+    }
+  });
+  window.addEventListener("resize", () => closeKeyContextMenu());
+  window.addEventListener("scroll", () => closeKeyContextMenu(), true);
 
   window.addEventListener("beforeunload", (event) => {
     if (!ui.dirty) return;

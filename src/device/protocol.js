@@ -29,6 +29,15 @@ function parseColor(color) {
   ];
 }
 
+function contrastTextColor(color) {
+  const [red, green, blue] = parseColor(color).map((channel) => channel / 255);
+  const linear = [red, green, blue].map((channel) =>
+    channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
+  );
+  const luminance = 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+  return luminance > 0.179 ? "#000000" : "#ffffff";
+}
+
 export function logicalKeyToHardware(logicalKey) {
   if (!Number.isInteger(logicalKey) || logicalKey < 1 || logicalKey > 18) {
     throw new RangeError("M18 key index must be between 1 and 18");
@@ -168,10 +177,11 @@ function labelSvg(label, color, hasArtwork) {
   const background = hasArtwork
     ? '<rect x="0" y="45" width="64" height="19" fill="#0b0c0a" fill-opacity="0.82"/>'
     : `<rect width="64" height="64" rx="8" fill="${color}"/><path d="M8 9h48M8 55h48" stroke="#fff" stroke-opacity=".18"/>`;
+  const textColor = hasArtwork ? "#fffaf0" : contrastTextColor(color);
   return Buffer.from(`
     <svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
       ${background}
-      <text x="32" y="${baseline}" text-anchor="middle" fill="#fffaf0"
+      <text x="32" y="${baseline}" text-anchor="middle" fill="${textColor}"
         font-family="DejaVu Sans, sans-serif" font-size="${fontSize}" font-weight="700"
         letter-spacing=".4">${escapeXml(visible || "UNSET")}</text>
     </svg>

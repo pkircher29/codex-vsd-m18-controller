@@ -20,7 +20,7 @@ class RecordingActionRunner {
   }
 }
 
-async function fixture(t) {
+async function fixture(t, { aiLayoutService } = {}) {
   const root = await mkdtemp(join(tmpdir(), "m18-controller-test-"));
   const actionRunner = new RecordingActionRunner();
   const controller = new Controller({
@@ -30,7 +30,10 @@ async function fixture(t) {
     actionRunner,
   });
   await controller.initialize();
-  const server = new ControllerHttpServer(controller, { port: 0 });
+  const server = new ControllerHttpServer(controller, {
+    port: 0,
+    ...(aiLayoutService ? { aiLayoutService } : {}),
+  });
   await server.listen();
   t.after(async () => {
     await server.close();
@@ -247,3 +250,61 @@ test("HTTP API is loopback-scoped and rejects unmarked mutations", async (t) => 
   assert.equal(index.status, 200);
   assert.match(await index.text(), /M18 Foundry/);
 });
+
+test("HTTP API resolves shortcuts and proxies AI drafts without persisting credentials", async (t) => {
+  const calls = [];
+  const aiLayoutService = {
+    async listModels(input) {
+      calls.push({ type: "models", input });
+      return { provider: input.provider, models: ["test-model"] };
+    },
+    async generate(input) {
+      calls.push({ type: "layout", input });
+      return { provider: input.provider, model: input.model, layout: { summary: "Test", keys: [] } };
+    },
+  };
+  const { server } = await fixture(t, { aiLayoutService });
+  const headers = {
+    "Content-Type": "application/json",
+    "X-VSD-Local-Client": "ui",
+    "X-VSD-Instance-Token": server.instanceToken,
+  };
+
+  const shortcutResponse = await fetch(`${server.url}/api/shortcuts/resolve`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      name: "Music.desktop",
+      content: "[Desktop Entry]\nType=Application\nName=Music\nExec=/usr/bin/playerctl play-pause",
+    }),
+  });
+  assert.equal(shortcutResponse.status, 200);
+  assert.deepEqual((await shortcutResponse.json()).shortcut.action, {
+    type: "command",
+    executable: "/usr/bin/playerctl",
+    args: ["play-pause"],
+  });
+
+  const modelsResponse = await fetch(`${server.url}/api/ai/models`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ provider: "openai", apiKey: "session-only" }),
+  });
+  assert.equal(modelsResponse.status, 200);
+  assert.deepEqual((await modelsResponse.json()).models, ["test-model"]);
+
+  const layoutResponse = await fetch(`${server.url}/api/ai/layout`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ provider: "openai", apiKey: "session-only", model: "test-model" }),
+  });
+  assert.equal(layoutResponse.status, 200);
+  assert.equal((await layoutResponse.json()).model, "test-model");
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].input.apiKey, "session-only");
+  assert.equal(controllerStateHasCredential(server.controller.getState(), "session-only"), false);
+});
+
+function controllerStateHasCredential(state, credential) {
+  return JSON.stringify(state).includes(credential);
+}

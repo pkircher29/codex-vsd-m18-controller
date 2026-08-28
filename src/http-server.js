@@ -3,9 +3,11 @@ import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, isAbsolute, normalize, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { AiLayoutService } from "./ai-layout-service.js";
 import { APP_VERSION, DEFAULT_HOST, DEFAULT_PORT, MAX_ASSET_BYTES, MAX_CONFIG_BYTES } from "./constants.js";
 import { RevisionConflictError } from "./config-store.js";
 import { createInstanceToken, instanceTokensEqual } from "./instance-session.js";
+import { resolveShortcut } from "./shortcut-resolver.js";
 import { errorMessage } from "./util.js";
 
 const PUBLIC_DIRECTORY = resolve(fileURLToPath(new URL("../public/", import.meta.url)));
@@ -105,12 +107,18 @@ export class ControllerHttpServer {
 
   constructor(
     controller,
-    { host = DEFAULT_HOST, port = DEFAULT_PORT, instanceToken = createInstanceToken() } = {},
+    {
+      host = DEFAULT_HOST,
+      port = DEFAULT_PORT,
+      instanceToken = createInstanceToken(),
+      aiLayoutService = new AiLayoutService(),
+    } = {},
   ) {
     this.controller = controller;
     this.host = host;
     this.port = port;
     this.instanceToken = instanceToken;
+    this.aiLayoutService = aiLayoutService;
     this.#server = createServer((request, response) => {
       this.#handle(request, response).catch((error) => this.#handleError(error, response));
     });
@@ -201,6 +209,15 @@ export class ControllerHttpServer {
       const buffer = await readBody(request, MAX_ASSET_BYTES);
       const asset = await this.controller.assetStore.save(buffer, request.headers["content-type"]);
       return sendJson(response, 201, { asset });
+    }
+    if (request.method === "POST" && url.pathname === "/api/shortcuts/resolve") {
+      return sendJson(response, 200, { shortcut: await resolveShortcut(await readJson(request)) });
+    }
+    if (request.method === "POST" && url.pathname === "/api/ai/models") {
+      return sendJson(response, 200, await this.aiLayoutService.listModels(await readJson(request)));
+    }
+    if (request.method === "POST" && url.pathname === "/api/ai/layout") {
+      return sendJson(response, 200, await this.aiLayoutService.generate(await readJson(request)));
     }
     if (request.method === "PUT" && url.pathname === "/api/config") {
       const { config, expectedRevision } = await readJson(request);

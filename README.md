@@ -10,6 +10,15 @@ Supported USB identities:
 
 The 15 LCD keys can show labels or uploaded artwork. The three lower buttons can run actions but do not have displays. Actions may launch an executable with an exact argument list, open an HTTP(S) URL, switch profiles, or do nothing. Commands are spawned directly without a shell.
 
+## Build a layout
+
+- Set a label and full-face color in the key inspector. LCD colors and labels are rendered into the 64×64 artwork sent to the dock.
+- Drop a Linux `.desktop` shortcut, an internet `.url`/`.webloc` shortcut, a direct executable path, a web address, or an image onto a key. **Choose shortcut** provides the same workflow without dragging.
+- Right-click a key (or press `Shift+F10`) and choose **Paste command** to split a copied command into an executable and exact argument list. Assignment never runs the command and remains a draft until Save or Apply.
+- Choose **Design with AI** to generate and preview an 18-key draft from a plain-language request. M18 Foundry can discover models from Ollama, OpenAI, Anthropic, Gemini, or any standard OpenAI-compatible local/hosted endpoint (including LM Studio-style local servers and multi-provider gateways). Provider credentials are used for the active request only and are not written to the application configuration or browser storage.
+
+Cloud chat subscriptions do not automatically provide API access; configure API billing and a provider API key separately. AI output is treated as untrusted draft data: commands are constrained to direct executable/argument actions, validated locally, previewed before acceptance, and never executed by the generation flow.
+
 ## Try it safely
 
 Node.js 20.9.0 or newer is required.

@@ -73,6 +73,8 @@
       </button>
     </div>
 
+    <section class="toast-region" id="toastRegion" aria-label="Notifications" aria-live="polite"></section>
+
     <main id="main-workspace" class="workspace" aria-busy="true">
       <div class="loading-panel" id="loadingPanel" role="status">
         <span class="loader-track" aria-hidden="true"><span></span></span>
@@ -145,6 +147,10 @@
               </p>
             </div>
             <div class="deck-heading-actions">
+              <button class="button button-dark" id="aiLayoutButton" type="button">
+                <svg class="icon" aria-hidden="true"><use href="#icon-spark"></use></svg>
+                Design with AI
+              </button>
               <button class="button button-quiet" id="saveButton" type="button" data-mutation disabled>
                 <svg class="icon" aria-hidden="true"><use href="#icon-save"></use></svg>
                 Save
@@ -165,6 +171,9 @@
           </div>
 
           <div class="machine-stage">
+            <p class="drop-guidance" id="dropGuidance">
+              Drop an app shortcut, command file, web address, or image directly onto any key.
+            </p>
             <div class="device-shell" aria-label="Interactive M18 button layout">
               <span class="shell-screw shell-screw-tl" aria-hidden="true"></span>
               <span class="shell-screw shell-screw-tr" aria-hidden="true"></span>
@@ -286,6 +295,28 @@
                   </button>
                 </div>
                 <p class="field-hint" id="imageHint">PNG, JPEG, WebP, or GIF · 2 MB maximum</p>
+              </fieldset>
+
+              <fieldset class="field shortcut-field">
+                <legend class="field-label">Quick assign</legend>
+                <div class="asset-row">
+                  <label class="upload-button" for="shortcutFile">
+                    <svg class="icon" aria-hidden="true"><use href="#icon-drop"></use></svg>
+                    <span>Choose shortcut</span>
+                  </label>
+                  <input
+                    class="visually-hidden"
+                    id="shortcutFile"
+                    name="shortcut"
+                    type="file"
+                    accept=".desktop,.url,.webloc,.lnk,.command,.sh,text/plain,image/jpeg,image/png,image/webp,image/gif"
+                  >
+                  <button class="button button-quiet button-compact" id="pasteCommandButton" type="button">
+                    <svg class="icon" aria-hidden="true"><use href="#icon-paste"></use></svg>
+                    Paste command
+                  </button>
+                </div>
+                <p class="field-hint">You can also right-click a key or drag a shortcut onto it. Assignments remain drafts until saved.</p>
               </fieldset>
             </div>
 
@@ -432,6 +463,105 @@
       </form>
     </dialog>
 
+    <dialog class="modal modal-ai" id="aiDialog" aria-labelledby="aiDialogTitle">
+      <form id="aiDialogForm" novalidate>
+        <div class="modal-index" aria-hidden="true">AI</div>
+        <div class="modal-copy">
+          <p class="section-code">Assisted layout</p>
+          <h2 id="aiDialogTitle">Design buttons with AI</h2>
+          <p>Describe the jobs you want on the dock. The result is previewed here and becomes an unsaved draft only after you accept it.</p>
+        </div>
+
+        <div class="ai-connection-grid">
+          <label class="field" for="aiProvider">
+            <span class="field-label">Provider</span>
+            <select id="aiProvider" name="provider">
+              <option value="ollama">Ollama · local</option>
+              <option value="openai-compatible">Compatible API · local or hosted</option>
+              <option value="openai">OpenAI API</option>
+              <option value="anthropic">Anthropic API</option>
+              <option value="gemini">Google Gemini API</option>
+            </select>
+          </label>
+
+          <label class="field" for="aiEndpoint" id="aiEndpointField">
+            <span class="field-label">Endpoint</span>
+            <input id="aiEndpoint" name="endpoint" type="url" value="http://127.0.0.1:11434" spellcheck="false">
+          </label>
+
+          <label class="field" for="aiApiKey" id="aiApiKeyField" hidden>
+            <span class="field-label">API key</span>
+            <input id="aiApiKey" name="apiKey" type="password" autocomplete="off" spellcheck="false">
+            <span class="field-hint">Used for this request only. It is not written to the M18 configuration or browser storage.</span>
+          </label>
+
+          <div class="field model-field">
+            <label class="field-label" for="aiModel">Model</label>
+            <div class="model-row">
+              <input id="aiModel" name="model" type="text" list="aiModelList" autocomplete="off" placeholder="Load models or enter an ID">
+              <datalist id="aiModelList"></datalist>
+              <button class="button button-quiet button-compact" id="loadModelsButton" type="button">Load models</button>
+            </div>
+            <span class="field-hint" id="aiModelHint">Connect to the provider to see models available to this account or local server.</span>
+          </div>
+        </div>
+
+        <label class="field" for="aiPrompt">
+          <span class="field-label">What should the buttons do?</span>
+          <textarea id="aiPrompt" name="prompt" rows="5" maxlength="12000" placeholder="Create a livestream layout with mic mute, camera controls, OBS scenes, music, chat, and a break screen."></textarea>
+        </label>
+
+        <fieldset class="field ai-scope">
+          <legend class="field-label">Change scope</legend>
+          <label><input type="radio" name="aiScope" value="empty" checked> Fill unassigned keys</label>
+          <label><input type="radio" name="aiScope" value="all"> Redesign all 18 keys</label>
+        </fieldset>
+
+        <p class="ai-boundary"><strong>API access:</strong> cloud chat subscriptions and API billing are separate. Generated commands are never run from this dialog; review them before saving or applying.</p>
+        <p class="form-error" id="aiDialogError" role="alert"></p>
+
+        <section class="ai-preview" id="aiPreview" aria-labelledby="aiPreviewTitle" hidden>
+          <div class="ai-preview-heading">
+            <div>
+              <p class="section-code">Draft preview</p>
+              <h3 id="aiPreviewTitle">Proposed 18-key layout</h3>
+            </div>
+            <p id="aiPreviewSummary"></p>
+          </div>
+          <div class="ai-preview-grid" id="aiPreviewGrid"></div>
+        </section>
+
+        <div class="modal-actions">
+          <button class="button button-quiet" type="button" id="cancelAiDialog">Cancel</button>
+          <button class="button button-dark" type="submit" id="generateAiLayoutButton">
+            <svg class="icon" aria-hidden="true"><use href="#icon-spark"></use></svg>
+            Generate preview
+          </button>
+          <button class="button button-primary" type="button" id="acceptAiLayoutButton" disabled>Use this layout</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="pasteDialog" aria-labelledby="pasteDialogTitle">
+      <form id="pasteDialogForm" novalidate>
+        <div class="modal-index" aria-hidden="true">&gt;_</div>
+        <div class="modal-copy">
+          <p class="section-code">Key <span id="pasteDialogKey">01</span></p>
+          <h2 id="pasteDialogTitle">Paste a command</h2>
+          <p>Paste an executable and its arguments. Quotes are preserved and the command is staged without running it.</p>
+        </div>
+        <label class="field" for="pastedCommand">
+          <span class="field-label">Command</span>
+          <textarea id="pastedCommand" rows="4" maxlength="8192" spellcheck="false" placeholder="/usr/bin/playerctl play-pause"></textarea>
+        </label>
+        <p class="form-error" id="pasteDialogError" role="alert"></p>
+        <div class="modal-actions">
+          <button class="button button-quiet" type="button" id="cancelPasteDialog">Cancel</button>
+          <button class="button button-primary" type="submit">Assign command</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog class="modal modal-confirm" id="confirmDialog" aria-labelledby="confirmDialogTitle">
       <form method="dialog">
         <div class="modal-index" id="confirmDialogIndex" aria-hidden="true">!</div>
@@ -447,7 +577,20 @@
       </form>
     </dialog>
 
-    <section class="toast-region" id="toastRegion" aria-label="Notifications" aria-live="polite"></section>
+    <div class="context-menu" id="keyContextMenu" role="menu" aria-label="Key assignment menu" hidden>
+      <button type="button" role="menuitem" id="contextPasteCommand">
+        <svg class="icon" aria-hidden="true"><use href="#icon-paste"></use></svg>
+        Paste command
+      </button>
+      <button type="button" role="menuitem" id="contextChooseShortcut">
+        <svg class="icon" aria-hidden="true"><use href="#icon-drop"></use></svg>
+        Choose shortcut or image
+      </button>
+      <button type="button" role="menuitem" id="contextClearAction">
+        <svg class="icon" aria-hidden="true"><use href="#icon-idle"></use></svg>
+        Clear action
+      </button>
+    </div>
 
     <svg class="svg-sprite" aria-hidden="true" focusable="false">
       <symbol id="icon-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
@@ -458,6 +601,9 @@
       <symbol id="icon-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2-7 4 14 2-7h6"/></symbol>
       <symbol id="icon-play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7V5Z"/></symbol>
       <symbol id="icon-upload" viewBox="0 0 24 24"><path d="M12 16V3m0 0L7 8m5-5 5 5M4 14v7h16v-7"/></symbol>
+      <symbol id="icon-paste" viewBox="0 0 24 24"><path d="M9 5V3h6v2m-8 0H5v16h14V5h-2M8 11h8m-8 4h8"/></symbol>
+      <symbol id="icon-drop" viewBox="0 0 24 24"><path d="M4 5h6l2 2h8v12H4V5Zm8 5v6m0 0-3-3m3 3 3-3"/></symbol>
+      <symbol id="icon-spark" viewBox="0 0 24 24"><path d="m12 2 1.5 6.5L20 10l-6.5 1.5L12 18l-1.5-6.5L4 10l6.5-1.5L12 2Zm7 14 .7 2.3L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-.7L19 16Z"/></symbol>
       <symbol id="icon-idle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M8 12h8"/></symbol>
       <symbol id="icon-adjust" viewBox="0 0 24 24"><path d="M4 7h8m4 0h4M4 17h4m4 0h8M12 4v6M8 14v6"/><circle cx="12" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></symbol>
       <symbol id="icon-alert" viewBox="0 0 24 24"><path d="m12 3 9 17H3L12 3Zm0 6v5m0 3v.5"/></symbol>
