@@ -1,20 +1,38 @@
 import { createHash, randomUUID } from "node:crypto";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, win32 } from "node:path";
 
-export function dataDirectory(env = process.env) {
-  const root = env.XDG_DATA_HOME || join(homedir(), ".local", "share");
+export function dataDirectory(env = process.env, platform = process.platform, home = homedir()) {
+  if (env.VSD_M18_DATA_HOME) return env.VSD_M18_DATA_HOME;
+  if (platform === "win32") {
+    const profile = env.USERPROFILE || home;
+    const root = env.LOCALAPPDATA || win32.join(profile, "AppData", "Local");
+    return win32.join(root, "M18Foundry");
+  }
+  const root = env.XDG_DATA_HOME || join(home, ".local", "share");
   return join(root, "vsd-m18-controller");
 }
 
-export function configDirectory(env = process.env) {
-  const root = env.XDG_CONFIG_HOME || join(homedir(), ".config");
+export function configDirectory(env = process.env, platform = process.platform, home = homedir()) {
+  if (env.VSD_M18_CONFIG_HOME) return env.VSD_M18_CONFIG_HOME;
+  if (platform === "win32") {
+    const profile = env.USERPROFILE || home;
+    const root = env.APPDATA || win32.join(profile, "AppData", "Roaming");
+    return win32.join(root, "M18Foundry");
+  }
+  const root = env.XDG_CONFIG_HOME || join(home, ".config");
   return join(root, "vsd-m18-controller");
 }
 
-export function runtimeDirectory(env = process.env) {
-  const root = env.XDG_RUNTIME_DIR || join("/tmp", `vsd-m18-${process.getuid?.() ?? "user"}`);
-  return join(root, "controller");
+export function runtimeDirectory(env = process.env, platform = process.platform, home = homedir()) {
+  if (env.VSD_M18_RUNTIME_HOME) return env.VSD_M18_RUNTIME_HOME;
+  if (platform === "win32") {
+    const profile = env.USERPROFILE || home;
+    const root = env.LOCALAPPDATA || win32.join(profile, "AppData", "Local");
+    return win32.join(root, "M18Foundry", "runtime");
+  }
+  if (env.XDG_RUNTIME_DIR) return join(env.XDG_RUNTIME_DIR, "vsd-m18-controller");
+  return join(configDirectory(env, platform, home), "runtime");
 }
 
 export function createId(prefix) {

@@ -171,28 +171,40 @@ test("a stale inspected action cannot execute after configuration changes", asyn
 
 test("HTTP API is loopback-scoped and rejects unmarked mutations", async (t) => {
   const { server } = await fixture(t);
-  const stateResponse = await fetch(`${server.url}/api/state`);
+  const unauthenticated = await fetch(`${server.url}/api/state`);
+  assert.equal(unauthenticated.status, 401);
+
+  const instanceHeaders = { "X-VSD-Instance-Token": server.instanceToken };
+  const stateResponse = await fetch(`${server.url}/api/state`, { headers: instanceHeaders });
   assert.equal(stateResponse.status, 200);
   const state = await stateResponse.json();
   assert.equal(state.device.state, "connected");
 
   const rejected = await fetch(`${server.url}/api/device/apply`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...instanceHeaders },
     body: "{}",
   });
   assert.equal(rejected.status, 403);
 
   const unboundApply = await fetch(`${server.url}/api/device/apply`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-VSD-Local-Client": "ui" },
+    headers: {
+      "Content-Type": "application/json",
+      "X-VSD-Local-Client": "ui",
+      ...instanceHeaders,
+    },
     body: "{}",
   });
   assert.equal(unboundApply.status, 400);
 
   const stringConfirmation = await fetch(`${server.url}/api/actions/trigger`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-VSD-Local-Client": "ui" },
+    headers: {
+      "Content-Type": "application/json",
+      "X-VSD-Local-Client": "ui",
+      ...instanceHeaders,
+    },
     body: JSON.stringify({
       profileId: state.config.activeProfileId,
       key: 1,
@@ -207,7 +219,11 @@ test("HTTP API is loopback-scoped and rejects unmarked mutations", async (t) => 
     `${server.url}/api/profiles/${encodeURIComponent(state.config.activeProfileId)}`,
     {
       method: "DELETE",
-      headers: { "Content-Type": "application/json", "X-VSD-Local-Client": "ui" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-VSD-Local-Client": "ui",
+        ...instanceHeaders,
+      },
       body: JSON.stringify({ expectedRevision: state.config.revision }),
     },
   );
@@ -215,11 +231,19 @@ test("HTTP API is loopback-scoped and rejects unmarked mutations", async (t) => 
 
   const accepted = await fetch(`${server.url}/api/device/apply`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-VSD-Local-Client": "ui" },
+    headers: {
+      "Content-Type": "application/json",
+      "X-VSD-Local-Client": "ui",
+      ...instanceHeaders,
+    },
     body: JSON.stringify({
       profileId: state.config.activeProfileId,
       expectedRevision: state.config.revision,
     }),
   });
   assert.equal(accepted.status, 200);
+
+  const index = await fetch(`${server.url}/`);
+  assert.equal(index.status, 200);
+  assert.match(await index.text(), /M18 Foundry/);
 });

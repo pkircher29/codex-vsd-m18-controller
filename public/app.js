@@ -5,12 +5,32 @@ const clone = (value) => structuredClone(value);
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+const INSTANCE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const ACTION_LABELS = Object.freeze({
   none: "No action",
   command: "Run command",
   url: "Open URL",
   profile: "Switch profile",
 });
+
+function consumeInstanceToken() {
+  const url = new URL(window.location.href);
+  const supplied = url.searchParams.get("instance");
+  let token = INSTANCE_TOKEN_PATTERN.test(supplied || "") ? supplied : null;
+  try {
+    if (token) sessionStorage.setItem("m18-instance-token", token);
+    else token = sessionStorage.getItem("m18-instance-token");
+  } catch {
+    // The URL token still works when session storage is unavailable.
+  }
+  if (url.searchParams.has("instance")) {
+    url.searchParams.delete("instance");
+    history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  }
+  return INSTANCE_TOKEN_PATTERN.test(token || "") ? token : null;
+}
+
+const instanceToken = consumeInstanceToken();
 
 const elements = {
   workspace: byId("main-workspace"),
@@ -26,6 +46,7 @@ const elements = {
   deviceStatusValue: byId("deviceStatusValue"),
   deviceStatusDetail: byId("deviceStatusDetail"),
   permissionStatusCell: byId("permissionStatusCell"),
+  permissionStatusLabel: byId("permissionStatusLabel"),
   permissionStatusValue: byId("permissionStatusValue"),
   permissionStatusDetail: byId("permissionStatusDetail"),
   modeStatusCell: byId("modeStatusCell"),
@@ -147,6 +168,7 @@ function isMutation(method) {
 async function apiRequest(path, { method = "GET", json, body, headers = {} } = {}) {
   const requestHeaders = new Headers(headers);
   requestHeaders.set("Accept", "application/json");
+  if (instanceToken) requestHeaders.set("X-VSD-Instance-Token", instanceToken);
   if (isMutation(method)) requestHeaders.set("X-VSD-Local-Client", "ui");
   if (json !== undefined) {
     requestHeaders.set("Content-Type", "application/json");
@@ -235,7 +257,8 @@ function normalizeColor(color, fallback = "#C47A32") {
 }
 
 function assetUrl(assetId) {
-  return `/api/assets/${encodeURIComponent(assetId)}`;
+  const suffix = instanceToken ? `?instance=${encodeURIComponent(instanceToken)}` : "";
+  return `/api/assets/${encodeURIComponent(assetId)}${suffix}`;
 }
 
 function actionLabel(action) {
@@ -347,7 +370,10 @@ async function loadState({ preserveDraft = false } = {}) {
 function connectEventStream() {
   ui.eventSource?.close();
   setLiveState("connecting", "Connecting");
-  const stream = new EventSource("/api/events");
+  const streamUrl = instanceToken
+    ? `/api/events?instance=${encodeURIComponent(instanceToken)}`
+    : "/api/events";
+  const stream = new EventSource(streamUrl);
   ui.eventSource = stream;
   stream.addEventListener("open", () => setLiveState("live", "Live link"));
   stream.addEventListener("state", (event) => {
@@ -395,12 +421,34 @@ function setStatusCell(cell, valueElement, detailElement, { tone, value, detail 
   cell.dataset.tone = tone;
   valueElement.textContent = value;
   detailElement.textContent = detail;
+  detailElement.title = detail;
+}
+
+function runtimePlatform() {
+  const runtime = ui.serverState?.runtime || {};
+  const rawPlatform = String(runtime.platform || "").trim().toLowerCase();
+  const knownPlatforms = {
+    win32: { key: "windows", label: "Windows" },
+    windows: { key: "windows", label: "Windows" },
+    linux: { key: "linux", label: "Linux" },
+    darwin: { key: "macos", label: "macOS" },
+    macos: { key: "macos", label: "macOS" },
+  };
+  const known = knownPlatforms[rawPlatform];
+  const serverLabel =
+    typeof runtime.platformLabel === "string" ? runtime.platformLabel.trim() : "";
+  return {
+    key: known?.key || "unknown",
+    label: serverLabel || known?.label || "Local",
+    identified: Boolean(serverLabel || known),
+  };
 }
 
 function renderStatus() {
   const status = ui.serverState.device || {};
   const identity = status.device;
   const state = status.state || "starting";
+  const platform = runtimePlatform();
   const devicePresentation = {
     connected: {
       tone: "good",
@@ -417,7 +465,7 @@ function renderStatus() {
     disconnected: {
       tone: "warning",
       value: "Not connected",
-      detail: "Connect a supported M18",
+      detail: status.message || "Connect a supported M18 by USB",
     },
     error: {
       tone: "danger",
@@ -427,7 +475,7 @@ function renderStatus() {
     starting: {
       tone: "neutral",
       value: "Inspecting USB",
-      detail: "Hardware discovery in progress",
+      detail: status.message || "Hardware discovery in progress",
     },
   }[state] || {
     tone: "neutral",
@@ -441,17 +489,57 @@ function renderStatus() {
     devicePresentation,
   );
 
+  elements.permissionStatusLabel.textContent = platform.identified
+    ? `${platform.label} access`
+    : "Device access";
+
   let permissionPresentation;
   if (identity?.simulated) {
-    permissionPresentation = { tone: "neutral", value: "Bypassed", detail: "Simulator uses no hidraw node" };
+    permissionPresentation = {
+      tone: "neutral",
+      value: "Bypassed",
+      detail:
+        platform.key === "linux"
+          ? "Simulator uses no hidraw node"
+          : platform.key === "windows"
+            ? "Simulator needs no Windows device access"
+            : "Simulator needs no hardware access",
+    };
   } else if (state === "connected") {
-    permissionPresentation = { tone: "good", value: "Granted", detail: "hidraw opened without root" };
+    permissionPresentation = {
+      tone: "good",
+      value: platform.key === "windows" ? "Ready" : "Granted",
+      detail:
+        platform.key === "linux"
+          ? "hidraw opened without root"
+          : platform.key === "windows"
+            ? "Windows HID interface opened"
+            : "HID interface opened by the local service",
+    };
   } else if (state === "permission") {
-    permissionPresentation = { tone: "danger", value: "Action required", detail: "Install udev rule and reconnect" };
+    const fallbackGuidance =
+      platform.key === "linux"
+        ? "Install the udev rule, then reconnect the dock"
+        : platform.key === "windows"
+          ? "Close other dock software, then reconnect the M18"
+          : "Allow device access, then reconnect the M18";
+    permissionPresentation = {
+      tone: "danger",
+      value: "Action required",
+      detail: status.message || fallbackGuidance,
+    };
   } else if (state === "error") {
-    permissionPresentation = { tone: "warning", value: "Unknown", detail: "Driver failed before access check" };
+    permissionPresentation = {
+      tone: "warning",
+      value: "Unknown",
+      detail: "The device driver failed before the access check",
+    };
   } else {
-    permissionPresentation = { tone: "neutral", value: "Not checked", detail: "Waiting for an M18 device" };
+    permissionPresentation = {
+      tone: "neutral",
+      value: "Not checked",
+      detail: "Waiting for an M18 device",
+    };
   }
   setStatusCell(
     elements.permissionStatusCell,
@@ -465,7 +553,11 @@ function renderStatus() {
   setStatusCell(elements.modeStatusCell, elements.modeStatusValue, elements.modeStatusDetail, {
     tone: simulated ? "warning" : state === "connected" ? "good" : "neutral",
     value: simulated ? "Simulator" : mode === "real" ? "Hardware only" : "Auto discover",
-    detail: simulated ? "Press testing is available" : "Linux HID transport",
+    detail: simulated
+      ? "Press testing is available"
+      : platform.identified
+        ? `${platform.label} HID transport`
+        : "Local HID transport",
   });
 }
 

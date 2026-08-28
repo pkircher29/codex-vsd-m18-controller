@@ -6,6 +6,7 @@ import { ConfigStore, RevisionConflictError } from "./config-store.js";
 import { LCD_KEY_COUNT } from "./constants.js";
 import { DeviceManager } from "./device/device-manager.js";
 import { renderKeyJpeg } from "./device/protocol.js";
+import { runtimeInfo } from "./platform.js";
 import { errorMessage, jsonClone, jsonFingerprint } from "./util.js";
 
 function domainError(statusCode, message) {
@@ -30,17 +31,14 @@ export class Controller extends EventEmitter {
   #operationQueue = Promise.resolve();
   #appliedSnapshot = null;
 
-  constructor({
-    configStore = new ConfigStore(),
-    assetStore = new AssetStore(),
-    deviceManager = new DeviceManager(),
-    actionRunner = new ActionRunner(),
-  } = {}) {
+  constructor(options = {}) {
     super();
-    this.configStore = configStore;
-    this.assetStore = assetStore;
-    this.deviceManager = deviceManager;
-    this.actionRunner = actionRunner;
+    const platform = options.platform || process.platform;
+    this.configStore = options.configStore || new ConfigStore();
+    this.assetStore = options.assetStore || new AssetStore();
+    this.deviceManager = options.deviceManager || new DeviceManager({ platform });
+    this.actionRunner = options.actionRunner || new ActionRunner({ platform });
+    this.runtime = runtimeInfo(platform);
     this.lastEvent = null;
     this.operation = null;
   }
@@ -91,6 +89,7 @@ export class Controller extends EventEmitter {
       }
       : null;
     return {
+      runtime: jsonClone(this.runtime),
       config,
       device: jsonClone(this.deviceManager.status),
       appliedState,

@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { DEFAULT_HOST, DEFAULT_PORT } from "./constants.js";
+import { APP_VERSION, DEFAULT_HOST, DEFAULT_PORT } from "./constants.js";
+import { instanceBaseUrl, readInstanceDescriptor } from "./instance-session.js";
 import { errorMessage, parseInteger, sleep } from "./util.js";
 
 const SERVER_ENTRY = fileURLToPath(new URL("./server.js", import.meta.url));
@@ -11,9 +12,12 @@ export class ServiceClient {
     port = parseInteger(process.env.VSD_M18_PORT, DEFAULT_PORT),
     autoStart = true,
   } = {}) {
+    this.host = host;
+    this.port = port;
     this.baseUrl = `http://${host}:${port}`;
     this.autoStart = autoStart;
     this.ready = null;
+    this.instanceDescriptor = null;
   }
 
   async ensureReady() {
@@ -36,6 +40,7 @@ export class ServiceClient {
       method,
       headers: {
         "X-VSD-Local-Client": "mcp",
+        "X-VSD-Instance-Token": this.instanceDescriptor.token,
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
         ...headers,
       },
@@ -63,28 +68,46 @@ export class ServiceClient {
   }
 
   async #ensureReady() {
-    if (await this.#isHealthy()) return;
+    if (await this.#adoptHealthyInstance()) return;
     if (!this.autoStart) throw new Error(`M18 Foundry is not running at ${this.baseUrl}`);
     const child = spawn(process.execPath, [SERVER_ENTRY, "--headless"], {
       detached: true,
       env: { ...process.env, VSD_M18_NO_BROWSER: "1" },
       stdio: "ignore",
+      windowsHide: true,
     });
     child.once("error", () => undefined);
     child.unref();
-    for (let attempt = 0; attempt < 20; attempt += 1) {
+    for (let attempt = 0; attempt < 40; attempt += 1) {
       await sleep(150);
-      if (await this.#isHealthy()) return;
+      if (await this.#adoptHealthyInstance()) return;
     }
     throw new Error(`M18 Foundry did not become ready at ${this.baseUrl}`);
   }
 
-  async #isHealthy() {
+  async #adoptHealthyInstance() {
+    const descriptor = await readInstanceDescriptor();
+    if (
+      !descriptor ||
+      descriptor.host !== this.host ||
+      (this.port !== 0 && descriptor.port !== this.port)
+    ) return false;
+    const baseUrl = instanceBaseUrl(descriptor);
     try {
-      const response = await fetch(`${this.baseUrl}/api/health`, {
+      const response = await fetch(`${baseUrl}/api/health`, {
+        headers: { "X-VSD-Instance-Token": descriptor.token },
         signal: AbortSignal.timeout(500),
       });
-      return response.ok;
+      if (!response.ok) return false;
+      const health = await response.json();
+      if (
+        health.ok !== true ||
+        health.version !== APP_VERSION ||
+        health.pid !== descriptor.pid
+      ) return false;
+      this.baseUrl = baseUrl;
+      this.instanceDescriptor = descriptor;
+      return true;
     } catch (error) {
       if (/abort|timeout|fetch failed/i.test(errorMessage(error))) return false;
       return false;

@@ -13,7 +13,7 @@
 
 - `connected`: hardware or simulator is ready;
 - `disconnected`: no supported unit was found;
-- `permission`: Linux detected the dock but hidraw access is missing;
+- `permission`: the dock was detected but its vendor HID interface could not be opened; on Linux this usually means hidraw access is missing, while on Windows another dock application may hold the interface;
 - `starting` or `error`: initialization is incomplete or failed.
 
 Configuration writes use the `revision` returned by the latest read. A conflict means another UI or agent saved first; refresh before deciding whether a retry is still correct. Saves are atomic and retain a last-known-good backup.

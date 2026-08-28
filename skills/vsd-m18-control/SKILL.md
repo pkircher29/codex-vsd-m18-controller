@@ -1,6 +1,6 @@
 ---
 name: vsd-m18-control
-description: Inspect, configure, render, and safely trigger VSDinside or Mirabox M18 Stream Dock profiles through the local vsdM18 MCP server. Use when the user asks about their M18 device, buttons, LCD artwork, profiles, brightness, LEDs, Linux access, or configured actions. Do not use for firmware flashing or unrelated Stream Deck models.
+description: Inspect, configure, render, and safely trigger VSDinside or Mirabox M18 Stream Dock profiles through the local vsdM18 MCP server. Use when the user asks about their M18 device, buttons, LCD artwork, profiles, brightness, LEDs, Linux or Windows access, or configured actions. Do not use for firmware flashing or unrelated Stream Deck models.
 ---
 
 # VSD M18 Control
@@ -24,6 +24,6 @@ Never infer permission to run a configured command or open a URL. Immediately be
 
 LCD artwork applies to keys 1-15. Keys 16-18 are physical non-LCD buttons. Do not attach an image asset to those three buttons. Preserve exact executable/argument boundaries for command actions; the controller intentionally does not invoke a shell.
 
-If Linux reports `permission`, direct the user to the repository's `scripts/install-linux.sh` and tell them the dock must be reconnected once. Do not weaken udev permissions or substitute a world-writable rule.
+For a Linux `permission` state, direct the user to the repository's `scripts/install-linux.sh` and tell them the dock must be reconnected once. Do not weaken udev permissions or substitute a world-writable rule. On Windows, the controller uses the native HID interface without a bundled driver; ask the user to close other dock software and reconnect the M18. Do not recommend changing device drivers unless diagnosis identifies a separate driver problem.
 
 For protocol, layout, and recovery details needed during diagnosis, read [Device and tool contract](references/device-and-tool-contract.md).

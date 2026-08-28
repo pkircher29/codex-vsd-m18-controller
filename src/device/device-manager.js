@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import EventEmitter from "node:events";
 import { SUPPORTED_DEVICES } from "../constants.js";
+import { deviceEventMonitorSpec, platformLabel } from "../platform.js";
 import { errorMessage } from "../util.js";
 import { HidM18Adapter } from "./hid-adapter.js";
 import { MockM18Adapter } from "./mock-adapter.js";
@@ -11,11 +12,13 @@ function definitionFor(info) {
   );
 }
 
-function isControlInterface(info) {
+export function isControlInterface(info, platform = process.platform) {
   if (info.usagePage != null && info.usage != null) {
     return info.usagePage === 0xffa0 && info.usage === 0x01;
   }
-  return info.interface === 0 || info.interface == null;
+  if (info.interface === 0) return true;
+  if (platform === "win32") return /[&#]mi_00(?:[&#]|$)/i.test(info.path || "");
+  return info.interface == null;
 }
 
 function permissionFailure(error) {
@@ -26,17 +29,23 @@ export class DeviceManager extends EventEmitter {
   #mode;
   #adapter = null;
   #scanPromise = null;
-  #udevMonitor = null;
+  #deviceMonitor = null;
   #rescanTimer = null;
   #reconcileTimer = null;
   #stopped = false;
 
-  constructor({ mode = process.env.VSD_M18_MODE || "auto" } = {}) {
+  constructor({
+    mode = process.env.VSD_M18_MODE || "auto",
+    platform = process.platform,
+    spawnImplementation = spawn,
+  } = {}) {
     super();
     if (!new Set(["auto", "real", "mock"]).has(mode)) {
       throw new TypeError("VSD_M18_MODE must be auto, real, or mock");
     }
     this.#mode = mode;
+    this.platform = platform;
+    this.spawnImplementation = spawnImplementation;
     this.status = {
       state: "starting",
       message: "Inspecting USB devices…",
@@ -56,7 +65,7 @@ export class DeviceManager extends EventEmitter {
       return;
     }
     await this.scan();
-    this.#startUdevMonitor();
+    this.#startDeviceMonitor();
     this.#reconcileTimer = setInterval(() => this.scan().catch(() => undefined), 60_000);
     this.#reconcileTimer.unref?.();
   }
@@ -74,8 +83,8 @@ export class DeviceManager extends EventEmitter {
     this.#stopped = true;
     clearTimeout(this.#rescanTimer);
     clearInterval(this.#reconcileTimer);
-    this.#udevMonitor?.kill();
-    this.#udevMonitor = null;
+    this.#deviceMonitor?.kill();
+    this.#deviceMonitor = null;
     const adapter = this.#adapter;
     this.#adapter = null;
     await adapter?.close().catch(() => undefined);
@@ -106,7 +115,9 @@ export class DeviceManager extends EventEmitter {
       return;
     }
 
-    const candidate = devices.find((info) => definitionFor(info) && isControlInterface(info));
+    const candidate = devices.find(
+      (info) => definitionFor(info) && isControlInterface(info, this.platform),
+    );
     if (!candidate) {
       if (this.#adapter) await this.#detach();
       this.#setStatus("disconnected", "No supported M18 is connected");
@@ -126,7 +137,7 @@ export class DeviceManager extends EventEmitter {
       this.#setStatus(
         permissionFailure(error) ? "permission" : "error",
         permissionFailure(error)
-          ? "M18 found, but Linux has not granted hidraw access. Run the included Linux installer, then reconnect the dock."
+          ? this.#accessFailureMessage()
           : `M18 found but could not be opened: ${message}`,
         {
           model: definition.model,
@@ -171,21 +182,33 @@ export class DeviceManager extends EventEmitter {
     this.#rescanTimer.unref?.();
   }
 
-  #startUdevMonitor() {
+  #accessFailureMessage() {
+    if (this.platform === "linux") {
+      return "M18 found, but Linux has not granted hidraw access. Run the included Linux installer, then reconnect the dock.";
+    }
+    if (this.platform === "win32") {
+      return "M18 found, but Windows could not open its vendor HID interface. Close other dock software, then reconnect the M18.";
+    }
+    return `M18 found, but ${platformLabel(this.platform)} could not open its vendor HID interface.`;
+  }
+
+  #startDeviceMonitor() {
+    const spec = deviceEventMonitorSpec({ platform: this.platform });
+    if (!spec) return;
     try {
-      const monitor = spawn(
-        "udevadm",
-        ["monitor", "--udev", "--subsystem-match=hidraw", "--property"],
-        { stdio: ["ignore", "pipe", "ignore"] },
-      );
-      this.#udevMonitor = monitor;
-      monitor.stdout.setEncoding("utf8");
-      monitor.stdout.on("data", () => this.#scheduleScan());
+      const monitor = this.spawnImplementation(spec.executable, spec.args, {
+        env: spec.env,
+        stdio: ["ignore", "pipe", "ignore"],
+        windowsHide: true,
+      });
+      this.#deviceMonitor = monitor;
+      monitor.stdout?.setEncoding("utf8");
+      monitor.stdout?.on("data", () => this.#scheduleScan());
       monitor.once("error", () => {
-        this.#udevMonitor = null;
+        this.#deviceMonitor = null;
       });
       monitor.once("exit", () => {
-        this.#udevMonitor = null;
+        this.#deviceMonitor = null;
       });
       monitor.unref();
     } catch {

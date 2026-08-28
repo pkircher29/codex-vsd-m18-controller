@@ -37,4 +37,4 @@ systemctl --user enable --now vsd-m18-controller.service
 
 echo
 echo "M18 Foundry is installed. Unplug and reconnect the M18 once so the new udev rule applies."
-echo "Then open 'M18 Foundry' from the application menu or visit http://127.0.0.1:31918."
+echo "Then open 'M18 Foundry' from the application menu. Its launcher discovers the private local URL."

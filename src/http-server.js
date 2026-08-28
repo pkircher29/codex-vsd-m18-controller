@@ -1,10 +1,11 @@
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
-import { extname, join, normalize, resolve } from "node:path";
+import { extname, isAbsolute, normalize, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { APP_VERSION, DEFAULT_HOST, DEFAULT_PORT, MAX_ASSET_BYTES, MAX_CONFIG_BYTES } from "./constants.js";
 import { RevisionConflictError } from "./config-store.js";
+import { createInstanceToken, instanceTokensEqual } from "./instance-session.js";
 import { errorMessage } from "./util.js";
 
 const PUBLIC_DIRECTORY = resolve(fileURLToPath(new URL("../public/", import.meta.url)));
@@ -88,7 +89,13 @@ function safeStaticPath(pathname) {
   const requested = pathname === "/" ? "/index.html" : pathname;
   const clean = normalize(decodeURIComponent(requested)).replace(/^[/\\]+/, "");
   const path = resolve(PUBLIC_DIRECTORY, clean);
-  return path.startsWith(`${PUBLIC_DIRECTORY}/`) ? path : null;
+  const displacement = relative(PUBLIC_DIRECTORY, path);
+  return displacement &&
+    displacement !== ".." &&
+    !displacement.startsWith(`..${sep}`) &&
+    !isAbsolute(displacement)
+    ? path
+    : null;
 }
 
 export class ControllerHttpServer {
@@ -96,10 +103,14 @@ export class ControllerHttpServer {
   #clients = new Set();
   #heartbeat = null;
 
-  constructor(controller, { host = DEFAULT_HOST, port = DEFAULT_PORT } = {}) {
+  constructor(
+    controller,
+    { host = DEFAULT_HOST, port = DEFAULT_PORT, instanceToken = createInstanceToken() } = {},
+  ) {
     this.controller = controller;
     this.host = host;
     this.port = port;
+    this.instanceToken = instanceToken;
     this.#server = createServer((request, response) => {
       this.#handle(request, response).catch((error) => this.#handleError(error, response));
     });
@@ -157,6 +168,12 @@ export class ControllerHttpServer {
     }
     if (!this.#isAllowedOrigin(request.headers.origin)) {
       return sendJson(response, 403, { error: "Cross-origin requests are not allowed" });
+    }
+    if (url.pathname.startsWith("/api/") && !this.#hasInstanceAccess(request, url)) {
+      response.setHeader("Cache-Control", "no-store");
+      return sendJson(response, 401, {
+        error: "This M18 session requires its private launcher token. Reopen M18 Foundry from its application shortcut.",
+      });
     }
     if (methodIsMutation(request.method) && !new Set(["ui", "mcp"]).has(request.headers["x-vsd-local-client"])) {
       return sendJson(response, 403, { error: "Missing local-client header" });
@@ -278,6 +295,13 @@ export class ControllerHttpServer {
       `http://localhost:${this.port}`,
       `http://[::1]:${this.port}`,
     ]).has(origin);
+  }
+
+  #hasInstanceAccess(request, url) {
+    const supplied =
+      request.headers["x-vsd-instance-token"] ||
+      (request.method === "GET" ? url.searchParams.get("instance") : null);
+    return instanceTokensEqual(supplied, this.instanceToken);
   }
 
   #openEventStream(request, response) {

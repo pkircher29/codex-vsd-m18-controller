@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -32,8 +32,9 @@ test("MCP stdio server negotiates, lists tools, and reads simulator status", asy
   const child = spawn(process.execPath, [MCP_ENTRY], {
     env: {
       ...process.env,
-      XDG_CONFIG_HOME: join(root, "config"),
-      XDG_DATA_HOME: join(root, "data"),
+      VSD_M18_CONFIG_HOME: join(root, "config"),
+      VSD_M18_DATA_HOME: join(root, "data"),
+      VSD_M18_RUNTIME_HOME: join(root, "runtime"),
       VSD_M18_MODE: "mock",
       VSD_M18_PORT: String(port),
       VSD_M18_NO_BROWSER: "1",
@@ -54,7 +55,11 @@ test("MCP stdio server negotiates, lists tools, and reads simulator status", asy
   t.after(async () => {
     child.kill("SIGTERM");
     try {
+      const descriptor = JSON.parse(
+        await readFile(join(root, "runtime", "instance.json"), "utf8"),
+      );
       const health = await fetch(`http://127.0.0.1:${port}/api/health`, {
+        headers: { "X-VSD-Instance-Token": descriptor.token },
         signal: AbortSignal.timeout(500),
       }).then((response) => response.json());
       process.kill(health.pid, "SIGTERM");

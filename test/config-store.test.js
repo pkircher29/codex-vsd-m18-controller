@@ -53,8 +53,10 @@ test("ConfigStore writes atomically, detects revision conflicts, and recovers it
 
   const disk = JSON.parse(await readFile(join(directory, "config.json"), "utf8"));
   assert.equal(disk.revision, 1);
-  assert.equal((await stat(join(directory, "config.json"))).mode & 0o777, 0o600);
-  assert.equal((await stat(join(directory, "config.json.bak"))).mode & 0o777, 0o600);
+  if (process.platform !== "win32") {
+    assert.equal((await stat(join(directory, "config.json"))).mode & 0o777, 0o600);
+    assert.equal((await stat(join(directory, "config.json.bak"))).mode & 0o777, 0o600);
+  }
   assert.deepEqual(
     (await readdir(directory)).filter((entry) => entry.endsWith(".tmp")),
     [],
