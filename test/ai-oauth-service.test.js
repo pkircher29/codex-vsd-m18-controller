@@ -20,10 +20,12 @@ test("OpenRouter OAuth uses PKCE and exchanges a single-use callback for a local
   assert.equal(authorization.origin, "https://openrouter.ai");
   assert.equal(authorization.searchParams.get("code_challenge_method"), "S256");
   assert.equal(callback.origin, "http://127.0.0.1:43123");
-  assert.equal(callback.pathname, "/api/ai/oauth/callback/openrouter");
+  assert.match(callback.pathname, /^\/api\/ai\/oauth\/callback\/openrouter\/[A-Za-z0-9_-]{32}$/);
+  assert.equal(callback.search, "");
+  const flowId = callback.pathname.split("/").at(-1);
 
   const completed = await service.complete("openrouter", {
-    flow: callback.searchParams.get("flow"),
+    flow: flowId,
     code: "one-time-code",
   });
   assert.equal(completed.provider, "openrouter");
@@ -44,7 +46,7 @@ test("OpenRouter OAuth uses PKCE and exchanges a single-use callback for a local
     authorization.searchParams.get("code_challenge"),
   );
   await assert.rejects(
-    () => service.complete("openrouter", { flow: callback.searchParams.get("flow"), code: "again" }),
+    () => service.complete("openrouter", { flow: flowId, code: "again" }),
     /expired/i,
   );
   assert.deepEqual(service.disconnect({

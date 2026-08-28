@@ -105,7 +105,7 @@ export class AiOauthService {
     const localBaseUrl = loopbackBaseUrl(baseUrl);
     const callbackUrl = provider === "gemini"
       ? localBaseUrl
-      : `${localBaseUrl}/api/ai/oauth/callback/${provider}?flow=${encodeURIComponent(flowId)}`;
+      : `${localBaseUrl}/api/ai/oauth/callback/${provider}/${encodeURIComponent(flowId)}`;
     const flow = {
       id: flowId,
       provider,

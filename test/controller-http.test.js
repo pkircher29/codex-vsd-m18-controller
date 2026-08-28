@@ -357,12 +357,16 @@ test("HTTP API completes OAuth callbacks and injects credentials only on provide
   assert.equal((await start.json()).authorizationUrl, "https://openrouter.ai/auth?test=1");
   assert.equal(calls[0].context.baseUrl, server.url);
 
-  const callback = await fetch(`${server.url}/api/ai/oauth/callback/openrouter?flow=test-flow&code=test-code`);
+  const callbackFlow = "test-flow-id-1234567890";
+  const callback = await fetch(`${server.url}/api/ai/oauth/callback/openrouter/${callbackFlow}?code=test-code`);
   assert.equal(callback.status, 200);
   const callbackHtml = await callback.text();
   assert.match(callbackHtml, /OpenRouter connected/);
   assert.match(callbackHtml, /oauth-callback\.js/);
   assert.doesNotMatch(callbackHtml, /server-held-oauth-key/);
+  const openRouterComplete = calls.find((call) => call.type === "complete" && call.provider === "openrouter");
+  assert.equal(openRouterComplete.query.flow, callbackFlow);
+  assert.equal(openRouterComplete.query.code, "test-code");
 
   const googleCallback = await fetch(`${server.url}/?state=google-flow&code=google-code`);
   assert.equal(googleCallback.status, 200);

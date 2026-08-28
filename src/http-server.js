@@ -240,11 +240,15 @@ export class ControllerHttpServer {
         return sendOauthCallback(response, { provider: "gemini", error: errorMessage(error).slice(0, 500) });
       }
     }
-    const oauthCallback = url.pathname.match(/^\/api\/ai\/oauth\/callback\/(openrouter|gemini)$/);
+    const oauthCallback = url.pathname.match(
+      /^\/api\/ai\/oauth\/callback\/(openrouter)(?:\/([A-Za-z0-9_-]{16,128}))?$|^\/api\/ai\/oauth\/callback\/(gemini)$/,
+    );
     if (request.method === "GET" && oauthCallback) {
-      const provider = oauthCallback[1];
+      const provider = oauthCallback[1] || oauthCallback[3];
+      const query = Object.fromEntries(url.searchParams);
+      if (oauthCallback[2]) query.flow = oauthCallback[2];
       try {
-        const result = await this.aiOauthService.complete(provider, Object.fromEntries(url.searchParams));
+        const result = await this.aiOauthService.complete(provider, query);
         return sendOauthCallback(response, result);
       } catch (error) {
         return sendOauthCallback(response, { provider, error: errorMessage(error).slice(0, 500) });
