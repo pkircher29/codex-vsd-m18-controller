@@ -149,7 +149,7 @@ async function readProviderResponse(response) {
   return body;
 }
 
-async function providerFetch(fetchImplementation, url, options = {}, timeout = 60_000) {
+async function providerFetch(fetchImplementation, url, options = {}, timeout = 180_000) {
   let response;
   try {
     response = await fetchImplementation(url, {
@@ -163,6 +163,12 @@ async function providerFetch(fetchImplementation, url, options = {}, timeout = 6
     });
   } catch (error) {
     const reason = error instanceof Error ? error.message : "connection failed";
+    if (error?.name === "TimeoutError" || /aborted.*timeout|timed? out/i.test(reason)) {
+      throw serviceError(
+        `The AI provider did not respond within ${Math.floor(timeout / 1000)} seconds. Try again or choose another model.`,
+        504,
+      );
+    }
     throw serviceError(`Could not reach the AI provider: ${reason}`);
   }
   return readProviderResponse(response);

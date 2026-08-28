@@ -138,3 +138,26 @@ test("AI layout validation rejects duplicate indexes and unsafe URL protocols", 
   };
   assert.throws(() => validateAiLayout(destructive), /must be assigned manually/);
 });
+
+test("AI generation reports provider timeouts with a recoverable message", async () => {
+  const service = new AiLayoutService({
+    fetchImplementation: async () => {
+      throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+    },
+  });
+
+  await assert.rejects(
+    () => service.generate({
+      provider: "openrouter",
+      apiKey: "test-key",
+      model: "test/model",
+      prompt: "Create a useful streaming layout",
+    }),
+    (error) => {
+      assert.equal(error.statusCode, 504);
+      assert.match(error.message, /did not respond within 180 seconds/i);
+      assert.match(error.message, /try again or choose another model/i);
+      return true;
+    },
+  );
+});
