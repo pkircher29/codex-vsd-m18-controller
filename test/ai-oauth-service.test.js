@@ -19,6 +19,7 @@ test("OpenRouter OAuth uses PKCE and exchanges a single-use callback for a local
   const callback = new URL(authorization.searchParams.get("callback_url"));
   assert.equal(authorization.origin, "https://openrouter.ai");
   assert.equal(authorization.searchParams.get("code_challenge_method"), "S256");
+  assert.equal(authorization.searchParams.get("key_label"), "M18Foundry");
   assert.equal(callback.origin, "http://127.0.0.1:43123");
   assert.match(callback.pathname, /^\/api\/ai\/oauth\/callback\/openrouter\/[A-Za-z0-9_-]{32}$/);
   assert.equal(callback.search, "");

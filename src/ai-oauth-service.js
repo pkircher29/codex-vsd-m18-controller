@@ -121,7 +121,7 @@ export class AiOauthService {
       authorizationUrl.searchParams.set("callback_url", callbackUrl);
       authorizationUrl.searchParams.set("code_challenge", codeChallenge(verifier));
       authorizationUrl.searchParams.set("code_challenge_method", "S256");
-      authorizationUrl.searchParams.set("key_label", "M18 Foundry");
+      authorizationUrl.searchParams.set("key_label", "M18Foundry");
     } else {
       flow.clientId = requiredText(input.clientId, "Google OAuth client ID");
       flow.clientSecret = optionalText(input.clientSecret);
