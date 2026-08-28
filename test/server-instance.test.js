@@ -68,6 +68,11 @@ test("server publishes, protects, and clears a dynamic local instance", async (t
 
   const index = await fetch(`${baseUrl}/`).then((response) => response.text());
   assert.match(index, /M18 Foundry/);
+  assert.match(index, /<select id="aiModel"/);
+  assert.doesNotMatch(index, /<datalist id="aiModelList"/);
+  const appScript = await fetch(`${baseUrl}/app.js?v=test`);
+  assert.equal(appScript.status, 200);
+  assert.equal(appScript.headers.get("cache-control"), "no-cache");
 
   child.kill("SIGTERM");
   await exitPromise;

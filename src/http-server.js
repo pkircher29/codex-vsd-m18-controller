@@ -437,7 +437,7 @@ export class ControllerHttpServer {
     response.statusCode = 200;
     response.setHeader("Content-Type", STATIC_TYPES.get(extname(path)) || "application/octet-stream");
     response.setHeader("Content-Length", info.size);
-    response.setHeader("Cache-Control", extname(path) === ".html" ? "no-cache" : "public, max-age=300");
+    response.setHeader("Cache-Control", "no-cache");
     if (method === "HEAD") return response.end();
     createReadStream(path).pipe(response);
   }

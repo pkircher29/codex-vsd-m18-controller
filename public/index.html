@@ -10,8 +10,8 @@
       content="Configure, test, and apply profiles for an 18-button VSDinside or Mirabox M18 Stream Dock."
     >
     <title>M18 Foundry — Stream Dock setup</title>
-    <link rel="stylesheet" href="/styles.css">
-    <script src="/app.js" defer></script>
+    <link rel="stylesheet" href="/styles.css?v=20260828-model-select">
+    <script src="/app.js?v=20260828-model-select" defer></script>
   </head>
 
   <body>
@@ -536,11 +536,17 @@
           <div class="field model-field">
             <label class="field-label" for="aiModel">Model</label>
             <div class="model-row">
-              <input id="aiModel" name="model" type="text" list="aiModelList" autocomplete="off" placeholder="Load models or enter an ID">
-              <datalist id="aiModelList"></datalist>
+              <select id="aiModel" name="model" aria-describedby="aiModelHint">
+                <option value="" selected disabled>Load models to choose</option>
+                <option value="__m18_manual_model__">Enter a model ID manually…</option>
+              </select>
               <button class="button button-quiet button-compact" id="loadModelsButton" type="button">Load models</button>
             </div>
-            <span class="field-hint" id="aiModelHint">Connect to the provider to see models available to this account or local server.</span>
+            <label class="custom-model-field" id="aiCustomModelField" for="aiCustomModel" hidden>
+              <span class="field-label">Custom model ID</span>
+              <input id="aiCustomModel" type="text" autocomplete="off" spellcheck="false" aria-describedby="aiModelHint" placeholder="provider/model-name">
+            </label>
+            <span class="field-hint" id="aiModelHint" role="status" aria-live="polite">Connect to the provider to see models available to this account or local server.</span>
           </div>
         </div>
 

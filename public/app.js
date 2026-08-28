@@ -7,6 +7,7 @@ const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const INSTANCE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const AI_OAUTH_PROVIDERS = new Set(["openrouter", "gemini"]);
+const AI_MANUAL_MODEL_VALUE = "__m18_manual_model__";
 const ACTION_LABELS = Object.freeze({
   none: "No action",
   command: "Run command",
@@ -136,7 +137,8 @@ const elements = {
   aiGoogleProjectId: byId("aiGoogleProjectId"),
   aiOauthHint: byId("aiOauthHint"),
   aiModel: byId("aiModel"),
-  aiModelList: byId("aiModelList"),
+  aiCustomModelField: byId("aiCustomModelField"),
+  aiCustomModel: byId("aiCustomModel"),
   aiModelHint: byId("aiModelHint"),
   loadModelsButton: byId("loadModelsButton"),
   aiPrompt: byId("aiPrompt"),
@@ -1552,6 +1554,36 @@ function renderAiOauthStatus(provider) {
     : "OpenRouter uses PKCE and a localhost callback. It creates a user-controlled OpenRouter key without exposing it to this page.";
 }
 
+function modelOption(value, label, { disabled = false, selected = false } = {}) {
+  const option = document.createElement("option");
+  option.value = value;
+  option.textContent = label;
+  option.disabled = disabled;
+  option.selected = selected;
+  return option;
+}
+
+function syncCustomModelField({ focus = false } = {}) {
+  const manual = elements.aiModel.value === AI_MANUAL_MODEL_VALUE;
+  elements.aiCustomModelField.hidden = !manual;
+  if (manual && focus) requestAnimationFrame(() => elements.aiCustomModel.focus());
+}
+
+function resetAiModelSelector() {
+  elements.aiModel.replaceChildren(
+    modelOption("", "Load models to choose", { disabled: true, selected: true }),
+    modelOption(AI_MANUAL_MODEL_VALUE, "Enter a model ID manually…"),
+  );
+  elements.aiCustomModel.value = "";
+  syncCustomModelField();
+}
+
+function selectedAiModel() {
+  return elements.aiModel.value === AI_MANUAL_MODEL_VALUE
+    ? elements.aiCustomModel.value.trim()
+    : elements.aiModel.value.trim();
+}
+
 async function refreshAiOauthStatus(provider) {
   if (!AI_OAUTH_PROVIDERS.has(provider)) return;
   const connectionId = oauthConnectionId(provider);
@@ -1585,8 +1617,7 @@ function renderAiAuthentication({ resetModel = true } = {}) {
     refreshAiOauthStatus(provider);
   }
   if (resetModel) {
-    elements.aiModelList.replaceChildren();
-    elements.aiModel.value = "";
+    resetAiModelSelector();
     elements.aiModelHint.textContent = "Connect to the provider to see models available to this account or local server.";
   }
   elements.aiDialogError.textContent = "";
@@ -1633,6 +1664,8 @@ function setAiBusy(busy, message = "") {
   elements.acceptAiLayoutButton.disabled = busy || !ui.aiProposal;
   elements.aiOauthConnectButton.disabled = busy;
   elements.aiOauthDisconnectButton.disabled = busy;
+  elements.aiModel.disabled = busy;
+  elements.aiCustomModel.disabled = busy;
   if (message) elements.aiModelHint.textContent = message;
 }
 
@@ -1698,8 +1731,7 @@ async function disconnectAiOauth() {
     forgetOauthConnection(provider);
     ui.aiOauthStatuses[provider] = false;
     renderAiOauthStatus(provider);
-    elements.aiModelList.replaceChildren();
-    elements.aiModel.value = "";
+    resetAiModelSelector();
     elements.aiModelHint.textContent = "Account disconnected from this controller session.";
   } catch (error) {
     elements.aiDialogError.textContent = error?.message || "The OAuth account could not be disconnected.";
@@ -1792,13 +1824,13 @@ async function loadAiModels() {
     if (!models.length) throw new Error("The provider returned no text-generation models. You can enter a model ID manually.");
     const fragment = document.createDocumentFragment();
     for (const model of models) {
-      const option = document.createElement("option");
-      option.value = model;
-      fragment.append(option);
+      fragment.append(modelOption(model, model));
     }
-    elements.aiModelList.replaceChildren(fragment);
-    if (!elements.aiModel.value) elements.aiModel.value = models[0];
-    elements.aiModelHint.textContent = `${models.length} available model${models.length === 1 ? "" : "s"} loaded. You can still enter another model ID.`;
+    fragment.append(modelOption(AI_MANUAL_MODEL_VALUE, "Enter a model ID manually…"));
+    elements.aiModel.replaceChildren(fragment);
+    elements.aiModel.value = models[0];
+    syncCustomModelField();
+    elements.aiModelHint.textContent = `${models.length} available model${models.length === 1 ? "" : "s"} loaded. Choose one from the dropdown or select the manual entry option.`;
   } catch (error) {
     elements.aiDialogError.textContent = error?.message || "Models could not be loaded.";
     elements.aiModelHint.textContent = "Model discovery failed; correct the connection or enter a model ID manually.";
@@ -1808,7 +1840,7 @@ async function loadAiModels() {
 }
 
 async function generateAiLayout() {
-  const model = elements.aiModel.value.trim();
+  const model = selectedAiModel();
   const prompt = elements.aiPrompt.value.trim();
   if (elements.aiAuthMethod.value === "oauth" && !oauthConnectionId(elements.aiProvider.value)) {
     elements.aiDialogError.textContent = "Sign in to this provider before generating a layout.";
@@ -1816,8 +1848,11 @@ async function generateAiLayout() {
     return;
   }
   if (!model) {
-    elements.aiDialogError.textContent = "Load or enter a model ID.";
-    elements.aiModel.focus();
+    const manual = elements.aiModel.value === AI_MANUAL_MODEL_VALUE;
+    elements.aiDialogError.textContent = manual
+      ? "Enter a custom model ID."
+      : "Load models and choose one, or select the manual entry option.";
+    (manual ? elements.aiCustomModel : elements.aiModel).focus();
     return;
   }
   if (!prompt) {
@@ -1946,6 +1981,7 @@ function wireEvents() {
   elements.aiOauthConnectButton.addEventListener("click", startAiOauth);
   elements.aiOauthDisconnectButton.addEventListener("click", disconnectAiOauth);
   elements.loadModelsButton.addEventListener("click", loadAiModels);
+  elements.aiModel.addEventListener("change", () => syncCustomModelField({ focus: true }));
   elements.aiDialogForm.addEventListener("submit", (event) => {
     event.preventDefault();
     generateAiLayout();

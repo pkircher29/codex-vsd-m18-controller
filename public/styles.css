@@ -1683,6 +1683,10 @@ input[type="range"]::-moz-range-thumb {
   gap: 0.5rem;
 }
 
+.custom-model-field {
+  margin-top: 0.65rem;
+}
+
 .ai-scope {
   display: flex;
   flex-wrap: wrap;
