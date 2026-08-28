@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import { extname, isAbsolute, normalize, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AiLayoutService } from "./ai-layout-service.js";
+import { AiOauthService } from "./ai-oauth-service.js";
 import { APP_VERSION, DEFAULT_HOST, DEFAULT_PORT, MAX_ASSET_BYTES, MAX_CONFIG_BYTES } from "./constants.js";
 import { RevisionConflictError } from "./config-store.js";
 import { createInstanceToken, instanceTokensEqual } from "./instance-session.js";
@@ -35,6 +36,53 @@ function sendJson(response, status, value) {
   response.statusCode = status;
   response.setHeader("Content-Type", "application/json; charset=utf-8");
   response.setHeader("Content-Length", body.length);
+  response.end(body);
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function sendOauthCallback(response, { provider, connectionId = "", error = "" }) {
+  const succeeded = Boolean(connectionId && !error);
+  const providerLabel = provider === "gemini" ? "Google Gemini" : "OpenRouter";
+  const body = Buffer.from(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${succeeded ? "AI account connected" : "AI sign-in incomplete"} · M18 Foundry</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/oauth-callback.js" defer></script>
+  </head>
+  <body class="oauth-callback-page">
+    <main
+      class="oauth-callback-card"
+      id="oauthResult"
+      data-status="${succeeded ? "success" : "error"}"
+      data-provider="${escapeHtml(provider)}"
+      data-connection-id="${escapeHtml(connectionId)}"
+      data-error="${escapeHtml(error)}"
+    >
+      <p class="section-code">M18 Foundry / AI connection</p>
+      <div class="oauth-callback-glyph" aria-hidden="true">${succeeded ? "✓" : "!"}</div>
+      <h1>${succeeded ? `${providerLabel} connected` : `${providerLabel} sign-in was not completed`}</h1>
+      <p id="oauthCallbackMessage">${succeeded
+        ? "Your provider credential is held only by the running local controller. You can close this window."
+        : escapeHtml(error || "Return to M18 Foundry and start the sign-in again.")}</p>
+      <button class="button button-primary" id="oauthReturnButton" type="button">Return to M18 Foundry</button>
+    </main>
+  </body>
+</html>`);
+  response.statusCode = succeeded ? 200 : 400;
+  response.setHeader("Content-Type", "text/html; charset=utf-8");
+  response.setHeader("Content-Length", body.length);
+  response.setHeader("Cache-Control", "no-store");
   response.end(body);
 }
 
@@ -112,6 +160,7 @@ export class ControllerHttpServer {
       port = DEFAULT_PORT,
       instanceToken = createInstanceToken(),
       aiLayoutService = new AiLayoutService(),
+      aiOauthService = new AiOauthService(),
     } = {},
   ) {
     this.controller = controller;
@@ -119,6 +168,7 @@ export class ControllerHttpServer {
     this.port = port;
     this.instanceToken = instanceToken;
     this.aiLayoutService = aiLayoutService;
+    this.aiOauthService = aiOauthService;
     this.#server = createServer((request, response) => {
       this.#handle(request, response).catch((error) => this.#handleError(error, response));
     });
@@ -177,6 +227,29 @@ export class ControllerHttpServer {
     if (!this.#isAllowedOrigin(request.headers.origin)) {
       return sendJson(response, 403, { error: "Cross-origin requests are not allowed" });
     }
+    const googleOauthCallback =
+      request.method === "GET" &&
+      url.pathname === "/" &&
+      url.searchParams.has("state") &&
+      (url.searchParams.has("code") || url.searchParams.has("error"));
+    if (googleOauthCallback) {
+      try {
+        const result = await this.aiOauthService.complete("gemini", Object.fromEntries(url.searchParams));
+        return sendOauthCallback(response, result);
+      } catch (error) {
+        return sendOauthCallback(response, { provider: "gemini", error: errorMessage(error).slice(0, 500) });
+      }
+    }
+    const oauthCallback = url.pathname.match(/^\/api\/ai\/oauth\/callback\/(openrouter|gemini)$/);
+    if (request.method === "GET" && oauthCallback) {
+      const provider = oauthCallback[1];
+      try {
+        const result = await this.aiOauthService.complete(provider, Object.fromEntries(url.searchParams));
+        return sendOauthCallback(response, result);
+      } catch (error) {
+        return sendOauthCallback(response, { provider, error: errorMessage(error).slice(0, 500) });
+      }
+    }
     if (url.pathname.startsWith("/api/") && !this.#hasInstanceAccess(request, url)) {
       response.setHeader("Cache-Control", "no-store");
       return sendJson(response, 401, {
@@ -213,11 +286,26 @@ export class ControllerHttpServer {
     if (request.method === "POST" && url.pathname === "/api/shortcuts/resolve") {
       return sendJson(response, 200, { shortcut: await resolveShortcut(await readJson(request)) });
     }
+    if (request.method === "POST" && url.pathname === "/api/ai/oauth/start") {
+      return sendJson(
+        response,
+        200,
+        this.aiOauthService.start(await readJson(request), { baseUrl: this.url }),
+      );
+    }
+    if (request.method === "POST" && url.pathname === "/api/ai/oauth/status") {
+      return sendJson(response, 200, this.aiOauthService.status(await readJson(request)));
+    }
+    if (request.method === "POST" && url.pathname === "/api/ai/oauth/disconnect") {
+      return sendJson(response, 200, this.aiOauthService.disconnect(await readJson(request)));
+    }
     if (request.method === "POST" && url.pathname === "/api/ai/models") {
-      return sendJson(response, 200, await this.aiLayoutService.listModels(await readJson(request)));
+      const input = await this.aiOauthService.authorize(await readJson(request));
+      return sendJson(response, 200, await this.aiLayoutService.listModels(input));
     }
     if (request.method === "POST" && url.pathname === "/api/ai/layout") {
-      return sendJson(response, 200, await this.aiLayoutService.generate(await readJson(request)));
+      const input = await this.aiOauthService.authorize(await readJson(request));
+      return sendJson(response, 200, await this.aiLayoutService.generate(input));
     }
     if (request.method === "PUT" && url.pathname === "/api/config") {
       const { config, expectedRevision } = await readJson(request);

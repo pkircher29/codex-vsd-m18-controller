@@ -20,7 +20,7 @@ class RecordingActionRunner {
   }
 }
 
-async function fixture(t, { aiLayoutService } = {}) {
+async function fixture(t, { aiLayoutService, aiOauthService } = {}) {
   const root = await mkdtemp(join(tmpdir(), "m18-controller-test-"));
   const actionRunner = new RecordingActionRunner();
   const controller = new Controller({
@@ -33,6 +33,7 @@ async function fixture(t, { aiLayoutService } = {}) {
   const server = new ControllerHttpServer(controller, {
     port: 0,
     ...(aiLayoutService ? { aiLayoutService } : {}),
+    ...(aiOauthService ? { aiOauthService } : {}),
   });
   await server.listen();
   t.after(async () => {
@@ -303,6 +304,81 @@ test("HTTP API resolves shortcuts and proxies AI drafts without persisting crede
   assert.equal(calls.length, 2);
   assert.equal(calls[0].input.apiKey, "session-only");
   assert.equal(controllerStateHasCredential(server.controller.getState(), "session-only"), false);
+});
+
+test("HTTP API completes OAuth callbacks and injects credentials only on provider requests", async (t) => {
+  const calls = [];
+  const aiOauthService = {
+    start(input, context) {
+      calls.push({ type: "start", input, context });
+      return { provider: input.provider, authorizationUrl: "https://openrouter.ai/auth?test=1", expiresIn: 600 };
+    },
+    async complete(provider, query) {
+      calls.push({ type: "complete", provider, query });
+      return { provider, connectionId: "local-oauth-connection" };
+    },
+    status(input) {
+      calls.push({ type: "status", input });
+      return { provider: input.provider, connected: input.oauthConnectionId === "local-oauth-connection" };
+    },
+    disconnect(input) {
+      calls.push({ type: "disconnect", input });
+      return { provider: input.provider, disconnected: true };
+    },
+    async authorize(input) {
+      calls.push({ type: "authorize", input });
+      const authorized = { ...input, apiKey: "server-held-oauth-key" };
+      delete authorized.oauthConnectionId;
+      return authorized;
+    },
+  };
+  const aiLayoutService = {
+    async listModels(input) {
+      calls.push({ type: "models", input });
+      return { provider: input.provider, models: ["openai/gpt-example"] };
+    },
+    async generate() {
+      throw new Error("not used");
+    },
+  };
+  const { server } = await fixture(t, { aiLayoutService, aiOauthService });
+  const headers = {
+    "Content-Type": "application/json",
+    "X-VSD-Local-Client": "ui",
+    "X-VSD-Instance-Token": server.instanceToken,
+  };
+
+  const start = await fetch(`${server.url}/api/ai/oauth/start`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ provider: "openrouter" }),
+  });
+  assert.equal(start.status, 200);
+  assert.equal((await start.json()).authorizationUrl, "https://openrouter.ai/auth?test=1");
+  assert.equal(calls[0].context.baseUrl, server.url);
+
+  const callback = await fetch(`${server.url}/api/ai/oauth/callback/openrouter?flow=test-flow&code=test-code`);
+  assert.equal(callback.status, 200);
+  const callbackHtml = await callback.text();
+  assert.match(callbackHtml, /OpenRouter connected/);
+  assert.match(callbackHtml, /oauth-callback\.js/);
+  assert.doesNotMatch(callbackHtml, /server-held-oauth-key/);
+
+  const googleCallback = await fetch(`${server.url}/?state=google-flow&code=google-code`);
+  assert.equal(googleCallback.status, 200);
+  assert.match(await googleCallback.text(), /Google Gemini connected/);
+
+  const models = await fetch(`${server.url}/api/ai/models`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ provider: "openrouter", oauthConnectionId: "local-oauth-connection" }),
+  });
+  assert.equal(models.status, 200);
+  assert.deepEqual((await models.json()).models, ["openai/gpt-example"]);
+  const modelCall = calls.find((call) => call.type === "models");
+  assert.equal(modelCall.input.apiKey, "server-held-oauth-key");
+  assert.equal(modelCall.input.oauthConnectionId, undefined);
+  assert.equal(controllerStateHasCredential(server.controller.getState(), "server-held-oauth-key"), false);
 });
 
 function controllerStateHasCredential(state, credential) {

@@ -6,6 +6,7 @@ const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const INSTANCE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+const AI_OAUTH_PROVIDERS = new Set(["openrouter", "gemini"]);
 const ACTION_LABELS = Object.freeze({
   none: "No action",
   command: "Run command",
@@ -119,10 +120,21 @@ const elements = {
   aiDialog: byId("aiDialog"),
   aiDialogForm: byId("aiDialogForm"),
   aiProvider: byId("aiProvider"),
+  aiAuthMethodField: byId("aiAuthMethodField"),
+  aiAuthMethod: byId("aiAuthMethod"),
   aiEndpointField: byId("aiEndpointField"),
   aiEndpoint: byId("aiEndpoint"),
   aiApiKeyField: byId("aiApiKeyField"),
   aiApiKey: byId("aiApiKey"),
+  aiOauthPanel: byId("aiOauthPanel"),
+  aiOauthStatus: byId("aiOauthStatus"),
+  aiOauthConnectButton: byId("aiOauthConnectButton"),
+  aiOauthDisconnectButton: byId("aiOauthDisconnectButton"),
+  aiGoogleOauthFields: byId("aiGoogleOauthFields"),
+  aiGoogleClientId: byId("aiGoogleClientId"),
+  aiGoogleClientSecret: byId("aiGoogleClientSecret"),
+  aiGoogleProjectId: byId("aiGoogleProjectId"),
+  aiOauthHint: byId("aiOauthHint"),
   aiModel: byId("aiModel"),
   aiModelList: byId("aiModelList"),
   aiModelHint: byId("aiModelHint"),
@@ -132,6 +144,7 @@ const elements = {
   aiPreview: byId("aiPreview"),
   aiPreviewSummary: byId("aiPreviewSummary"),
   aiPreviewGrid: byId("aiPreviewGrid"),
+  aiBoundary: byId("aiBoundary"),
   cancelAiDialog: byId("cancelAiDialog"),
   generateAiLayoutButton: byId("generateAiLayoutButton"),
   acceptAiLayoutButton: byId("acceptAiLayoutButton"),
@@ -170,6 +183,9 @@ const ui = {
   pasteDialogOpener: null,
   aiProposal: null,
   aiBusy: false,
+  aiOauthConnections: {},
+  aiOauthStatuses: {},
+  aiOauthPopup: null,
   pasteTargetKey: 1,
   contextKey: null,
   confirmResolver: null,
@@ -1450,28 +1466,163 @@ function showToast({ tone = "info", title, message, duration = 6000 }) {
 }
 
 function aiProviderPayload() {
-  return {
+  const provider = elements.aiProvider.value;
+  const authentication = elements.aiAuthMethod.value || (provider === "ollama" ? "none" : "api-key");
+  const payload = {
     provider: elements.aiProvider.value,
     baseUrl: elements.aiEndpoint.value.trim(),
-    apiKey: elements.aiApiKey.value,
+    authentication,
   };
+  if (authentication === "oauth") payload.oauthConnectionId = oauthConnectionId(provider);
+  else if (authentication === "api-key") payload.apiKey = elements.aiApiKey.value;
+  return payload;
+}
+
+function oauthStorageKey(provider) {
+  return `m18-ai-oauth:${provider}`;
+}
+
+function oauthConnectionId(provider) {
+  if (ui.aiOauthConnections[provider]) return ui.aiOauthConnections[provider];
+  try {
+    const stored = localStorage.getItem(oauthStorageKey(provider)) || "";
+    if (stored) ui.aiOauthConnections[provider] = stored;
+    return stored;
+  } catch {
+    return "";
+  }
+}
+
+function rememberOauthConnection(provider, connectionId) {
+  ui.aiOauthConnections[provider] = connectionId;
+  try {
+    localStorage.setItem(oauthStorageKey(provider), connectionId);
+  } catch {
+    // The connection remains available in this page when storage is unavailable.
+  }
+}
+
+function forgetOauthConnection(provider) {
+  delete ui.aiOauthConnections[provider];
+  delete ui.aiOauthStatuses[provider];
+  try {
+    localStorage.removeItem(oauthStorageKey(provider));
+  } catch {
+    // There may be no writable storage in a hardened browser profile.
+  }
+}
+
+function aiAuthenticationOptions(provider) {
+  if (provider === "ollama") return [{ value: "none", label: "No authentication" }];
+  if (provider === "openrouter") {
+    return [
+      { value: "oauth", label: "Sign in with OpenRouter" },
+      { value: "api-key", label: "OpenRouter API key" },
+    ];
+  }
+  if (provider === "gemini") {
+    return [
+      { value: "oauth", label: "Google OAuth" },
+      { value: "api-key", label: "Gemini API key" },
+    ];
+  }
+  return [{ value: "api-key", label: "API key" }];
+}
+
+function renderAiOauthStatus(provider) {
+  const connected = ui.aiOauthStatuses[provider] === true;
+  const pending = ui.aiOauthStatuses[provider] === "pending";
+  elements.aiOauthStatus.dataset.state = connected ? "connected" : pending ? "pending" : "disconnected";
+  elements.aiOauthStatus.querySelector("strong").textContent = connected
+    ? "Connected for this controller session"
+    : pending
+      ? "Waiting for browser sign-in"
+      : "Not connected";
+  elements.aiOauthConnectButton.textContent = connected
+    ? "Reconnect"
+    : pending
+      ? "Restart sign-in"
+      : provider === "gemini"
+        ? "Sign in with Google"
+        : "Sign in with OpenRouter";
+  elements.aiOauthDisconnectButton.hidden = !connected;
+  elements.aiGoogleOauthFields.hidden = provider !== "gemini" || connected;
+  elements.aiOauthHint.textContent = provider === "gemini"
+    ? "Use a Google Desktop OAuth client and the Cloud project that owns Gemini API quota. The client secret is optional for installed-app clients."
+    : "OpenRouter uses PKCE and a localhost callback. It creates a user-controlled OpenRouter key without exposing it to this page.";
+}
+
+async function refreshAiOauthStatus(provider) {
+  if (!AI_OAUTH_PROVIDERS.has(provider)) return;
+  const connectionId = oauthConnectionId(provider);
+  if (!connectionId) {
+    ui.aiOauthStatuses[provider] = false;
+    if (elements.aiProvider.value === provider) renderAiOauthStatus(provider);
+    return;
+  }
+  try {
+    const response = await apiRequest("/api/ai/oauth/status", {
+      method: "POST",
+      json: { provider, oauthConnectionId: connectionId },
+    });
+    ui.aiOauthStatuses[provider] = response?.connected === true;
+    if (!response?.connected) forgetOauthConnection(provider);
+  } catch {
+    forgetOauthConnection(provider);
+    ui.aiOauthStatuses[provider] = false;
+  }
+  if (elements.aiProvider.value === provider) renderAiOauthStatus(provider);
+}
+
+function renderAiAuthentication({ resetModel = true } = {}) {
+  const provider = elements.aiProvider.value;
+  const authentication = elements.aiAuthMethod.value || (provider === "ollama" ? "none" : "api-key");
+  const usesOauth = authentication === "oauth" && AI_OAUTH_PROVIDERS.has(provider);
+  elements.aiApiKeyField.hidden = authentication !== "api-key";
+  elements.aiOauthPanel.hidden = !usesOauth;
+  if (usesOauth) {
+    renderAiOauthStatus(provider);
+    refreshAiOauthStatus(provider);
+  }
+  if (resetModel) {
+    elements.aiModelList.replaceChildren();
+    elements.aiModel.value = "";
+    elements.aiModelHint.textContent = "Connect to the provider to see models available to this account or local server.";
+  }
+  elements.aiDialogError.textContent = "";
 }
 
 function renderAiProvider() {
   const provider = elements.aiProvider.value;
   const usesEndpoint = new Set(["ollama", "openai-compatible"]).has(provider);
   elements.aiEndpointField.hidden = !usesEndpoint;
-  elements.aiApiKeyField.hidden = provider === "ollama";
   if (provider === "ollama" && (!/^https?:\/\//i.test(elements.aiEndpoint.value) || elements.aiEndpoint.value.includes(":1234"))) {
     elements.aiEndpoint.value = "http://127.0.0.1:11434";
   }
   if (provider === "openai-compatible" && (!/^https?:\/\//i.test(elements.aiEndpoint.value) || elements.aiEndpoint.value.includes(":11434"))) {
     elements.aiEndpoint.value = "http://127.0.0.1:1234/v1";
   }
-  elements.aiModelList.replaceChildren();
-  elements.aiModel.value = "";
-  elements.aiModelHint.textContent = "Connect to the provider to see models available to this account or local server.";
-  elements.aiDialogError.textContent = "";
+  const options = aiAuthenticationOptions(provider);
+  const fragment = document.createDocumentFragment();
+  for (const option of options) {
+    const element = document.createElement("option");
+    element.value = option.value;
+    element.textContent = option.label;
+    fragment.append(element);
+  }
+  elements.aiAuthMethod.replaceChildren(fragment);
+  elements.aiAuthMethod.value = options[0].value;
+  elements.aiAuthMethodField.hidden = options.length === 1;
+  if (provider === "openrouter") {
+    elements.aiBoundary.innerHTML = "<strong>Account access:</strong> OpenRouter OAuth uses OpenRouter credits or BYOK settings; it does not consume ChatGPT, Claude, or Gemini app subscriptions. Review every generated command before applying.";
+  } else if (provider === "gemini") {
+    elements.aiBoundary.innerHTML = "<strong>Google access:</strong> OAuth uses Gemini API quota and billing from the selected Cloud project. A Gemini app subscription is separate. Review every generated command before applying.";
+  } else if (provider === "openai") {
+    elements.aiBoundary.innerHTML = "<strong>OpenAI access:</strong> the direct OpenAI API uses API credentials; a ChatGPT subscription does not authorize API requests. Review every generated command before applying.";
+  } else {
+    elements.aiBoundary.innerHTML = "<strong>API access:</strong> cloud chat subscriptions and API billing are separate. Generated commands are never run from this dialog; review them before saving or applying.";
+  }
+  renderAiAuthentication();
 }
 
 function setAiBusy(busy, message = "") {
@@ -1480,7 +1631,105 @@ function setAiBusy(busy, message = "") {
   elements.loadModelsButton.disabled = busy;
   elements.generateAiLayoutButton.disabled = busy;
   elements.acceptAiLayoutButton.disabled = busy || !ui.aiProposal;
+  elements.aiOauthConnectButton.disabled = busy;
+  elements.aiOauthDisconnectButton.disabled = busy;
   if (message) elements.aiModelHint.textContent = message;
+}
+
+async function startAiOauth() {
+  const provider = elements.aiProvider.value;
+  if (!AI_OAUTH_PROVIDERS.has(provider) || elements.aiAuthMethod.value !== "oauth") return;
+  const input = { provider };
+  if (provider === "gemini") {
+    input.clientId = elements.aiGoogleClientId.value.trim();
+    input.clientSecret = elements.aiGoogleClientSecret.value;
+    input.projectId = elements.aiGoogleProjectId.value.trim();
+    if (!input.clientId) {
+      elements.aiDialogError.textContent = "Enter the Google Desktop OAuth client ID.";
+      elements.aiGoogleClientId.focus();
+      return;
+    }
+    if (!input.projectId) {
+      elements.aiDialogError.textContent = "Enter the Google Cloud project ID used for Gemini API quota.";
+      elements.aiGoogleProjectId.focus();
+      return;
+    }
+  }
+
+  const popup = window.open("about:blank", "m18-ai-oauth", "popup,width=620,height=760");
+  if (!popup) {
+    elements.aiDialogError.textContent = "Allow popups for this local page, then try the OAuth sign-in again.";
+    return;
+  }
+  ui.aiOauthPopup = popup;
+  elements.aiDialogError.textContent = "";
+  setAiBusy(true, `Preparing ${provider === "gemini" ? "Google" : "OpenRouter"} sign-in…`);
+  try {
+    const response = await apiRequest("/api/ai/oauth/start", { method: "POST", json: input });
+    const authorizationUrl = new URL(response.authorizationUrl);
+    const allowedOrigin = provider === "gemini" ? "https://accounts.google.com" : "https://openrouter.ai";
+    if (authorizationUrl.origin !== allowedOrigin) throw new Error("The controller returned an unexpected OAuth address.");
+    ui.aiOauthStatuses[provider] = "pending";
+    renderAiOauthStatus(provider);
+    popup.location.href = authorizationUrl.toString();
+    elements.aiModelHint.textContent = "Finish signing in in the browser window, then return here.";
+  } catch (error) {
+    popup.close();
+    ui.aiOauthPopup = null;
+    ui.aiOauthStatuses[provider] = false;
+    renderAiOauthStatus(provider);
+    elements.aiDialogError.textContent = error?.message || "OAuth sign-in could not start.";
+  } finally {
+    setAiBusy(false);
+  }
+}
+
+async function disconnectAiOauth() {
+  const provider = elements.aiProvider.value;
+  const connectionId = oauthConnectionId(provider);
+  if (!connectionId) return;
+  elements.aiDialogError.textContent = "";
+  setAiBusy(true, "Disconnecting the AI account…");
+  try {
+    await apiRequest("/api/ai/oauth/disconnect", {
+      method: "POST",
+      json: { provider, oauthConnectionId: connectionId },
+    });
+    forgetOauthConnection(provider);
+    ui.aiOauthStatuses[provider] = false;
+    renderAiOauthStatus(provider);
+    elements.aiModelList.replaceChildren();
+    elements.aiModel.value = "";
+    elements.aiModelHint.textContent = "Account disconnected from this controller session.";
+  } catch (error) {
+    elements.aiDialogError.textContent = error?.message || "The OAuth account could not be disconnected.";
+  } finally {
+    setAiBusy(false);
+  }
+}
+
+function handleAiOauthMessage(event) {
+  if (event.origin !== window.location.origin || event.data?.source !== "m18-ai-oauth") return;
+  const provider = event.data.provider;
+  if (!AI_OAUTH_PROVIDERS.has(provider)) return;
+  ui.aiOauthPopup = null;
+  if (event.data.status === "success" && typeof event.data.connectionId === "string") {
+    rememberOauthConnection(provider, event.data.connectionId);
+    ui.aiOauthStatuses[provider] = true;
+    if (elements.aiProvider.value === provider) {
+      renderAiOauthStatus(provider);
+      elements.aiDialogError.textContent = "";
+      elements.aiModelHint.textContent = "Account connected. Load the models available to this account.";
+      if (elements.aiDialog.open) elements.loadModelsButton.focus();
+    }
+    return;
+  }
+  forgetOauthConnection(provider);
+  ui.aiOauthStatuses[provider] = false;
+  if (elements.aiProvider.value === provider) {
+    renderAiOauthStatus(provider);
+    elements.aiDialogError.textContent = event.data.error || "OAuth sign-in was not completed.";
+  }
 }
 
 function openAiDialog() {
@@ -1528,6 +1777,11 @@ function renderAiPreview(proposal) {
 
 async function loadAiModels() {
   elements.aiDialogError.textContent = "";
+  if (elements.aiAuthMethod.value === "oauth" && !oauthConnectionId(elements.aiProvider.value)) {
+    elements.aiDialogError.textContent = "Sign in to this provider before loading models.";
+    elements.aiOauthConnectButton.focus();
+    return;
+  }
   setAiBusy(true, "Loading models from the provider…");
   try {
     const response = await apiRequest("/api/ai/models", {
@@ -1556,6 +1810,11 @@ async function loadAiModels() {
 async function generateAiLayout() {
   const model = elements.aiModel.value.trim();
   const prompt = elements.aiPrompt.value.trim();
+  if (elements.aiAuthMethod.value === "oauth" && !oauthConnectionId(elements.aiProvider.value)) {
+    elements.aiDialogError.textContent = "Sign in to this provider before generating a layout.";
+    elements.aiOauthConnectButton.focus();
+    return;
+  }
   if (!model) {
     elements.aiDialogError.textContent = "Load or enter a model ID.";
     elements.aiModel.focus();
@@ -1683,6 +1942,9 @@ function wireEvents() {
 
   elements.aiLayoutButton.addEventListener("click", openAiDialog);
   elements.aiProvider.addEventListener("change", renderAiProvider);
+  elements.aiAuthMethod.addEventListener("change", () => renderAiAuthentication());
+  elements.aiOauthConnectButton.addEventListener("click", startAiOauth);
+  elements.aiOauthDisconnectButton.addEventListener("click", disconnectAiOauth);
   elements.loadModelsButton.addEventListener("click", loadAiModels);
   elements.aiDialogForm.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -1693,8 +1955,19 @@ function wireEvents() {
   elements.aiDialog.addEventListener("close", () => {
     ui.aiProposal = null;
     elements.aiApiKey.value = "";
+    elements.aiGoogleClientSecret.value = "";
     requestAnimationFrame(() => ui.aiDialogOpener?.focus?.());
     ui.aiDialogOpener = null;
+  });
+
+  window.addEventListener("message", handleAiOauthMessage);
+  window.addEventListener("storage", (event) => {
+    if (!event.key?.startsWith("m18-ai-oauth:")) return;
+    const provider = event.key.slice("m18-ai-oauth:".length);
+    if (!AI_OAUTH_PROVIDERS.has(provider)) return;
+    if (event.newValue) ui.aiOauthConnections[provider] = event.newValue;
+    else forgetOauthConnection(provider);
+    refreshAiOauthStatus(provider);
   });
 
   elements.pasteCommandButton.addEventListener("click", () => pasteCommandForKey(ui.selectedKey));

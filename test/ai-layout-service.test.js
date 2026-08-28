@@ -70,6 +70,51 @@ test("OpenAI-compatible layout generation returns a validated 18-key draft", asy
   assert.match(requestBody.messages[1].content, /never generate shell operators/i);
 });
 
+test("OAuth credentials authorize Google Gemini and OpenRouter without exposing browser tokens", async () => {
+  const requests = [];
+  const service = new AiLayoutService({
+    fetchImplementation: async (url, options) => {
+      requests.push({ url, options });
+      if (url.includes("generativelanguage.googleapis.com")) {
+        return new Response(JSON.stringify({
+          models: [{ name: "models/gemini-oauth", supportedGenerationMethods: ["generateContent"] }],
+        }));
+      }
+      if (url.endsWith("/models")) {
+        return new Response(JSON.stringify({ data: [{ id: "anthropic/claude-example" }] }));
+      }
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: JSON.stringify(layoutFixture()) } }],
+      }));
+    },
+  });
+
+  const google = await service.listModels({
+    provider: "gemini",
+    oauthAccessToken: "google-oauth-access",
+    oauthProjectId: "m18-project",
+  });
+  assert.deepEqual(google.models, ["gemini-oauth"]);
+  assert.equal(requests[0].options.headers.Authorization, "Bearer google-oauth-access");
+  assert.equal(requests[0].options.headers["x-goog-user-project"], "m18-project");
+  assert.equal(requests[0].options.headers["x-goog-api-key"], undefined);
+
+  const models = await service.listModels({ provider: "openrouter", apiKey: "openrouter-key" });
+  assert.deepEqual(models.models, ["anthropic/claude-example"]);
+  const generated = await service.generate({
+    provider: "openrouter",
+    apiKey: "openrouter-key",
+    model: "anthropic/claude-example",
+    prompt: "Build a broadcast layout",
+    scope: "all",
+    profile: { keys: [] },
+  });
+  assert.equal(generated.layout.keys.length, 18);
+  assert.equal(requests[1].options.headers.Authorization, "Bearer openrouter-key");
+  assert.equal(requests[2].url, "https://openrouter.ai/api/v1/chat/completions");
+  assert.equal(requests[2].options.headers.Authorization, "Bearer openrouter-key");
+});
+
 test("AI layout validation rejects duplicate indexes and unsafe URL protocols", () => {
   const duplicate = layoutFixture();
   duplicate.keys[1].index = 1;

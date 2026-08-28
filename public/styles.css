@@ -1593,6 +1593,90 @@ input[type="range"]::-moz-range-thumb {
   grid-column: 1 / -1;
 }
 
+.ai-connection-grid > .oauth-panel {
+  grid-column: 1 / -1;
+}
+
+.oauth-panel {
+  margin: 0.25rem 0 0.9rem;
+  padding: 0.85rem;
+  background: var(--ivory-150);
+  border: 1px solid var(--line-strong);
+  border-left: 4px solid var(--graphite-700);
+}
+
+.oauth-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.oauth-panel-heading p {
+  margin: 0;
+}
+
+.oauth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.oauth-status {
+  margin-top: 0.3rem !important;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.oauth-status > span {
+  width: 0.65rem;
+  height: 0.65rem;
+  flex: 0 0 auto;
+  background: var(--graphite-500);
+  border: 1px solid var(--graphite-800);
+  border-radius: 50%;
+}
+
+.oauth-status[data-state="pending"] > span {
+  background: var(--amber-300);
+}
+
+.oauth-status[data-state="connected"] {
+  color: #245439;
+}
+
+.oauth-status[data-state="connected"] > span {
+  background: #3c9a62;
+  border-color: #245439;
+}
+
+.google-oauth-fields {
+  margin-top: 0.85rem;
+  display: grid;
+  grid-template-columns: minmax(15rem, 1.25fr) minmax(12rem, 0.75fr);
+  gap: 0 0.75rem;
+}
+
+.google-oauth-fields .field:last-child {
+  grid-column: 1 / -1;
+}
+
+.optional-label {
+  color: var(--muted);
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: none;
+}
+
+.oauth-panel > .field-hint {
+  display: block;
+  margin-top: 0.7rem;
+}
+
 .model-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1706,6 +1790,63 @@ input[type="range"]::-moz-range-thumb {
   color: var(--ivory-100);
   background: var(--graphite-700);
   border-radius: 999px;
+}
+
+.oauth-callback-page {
+  min-height: 100vh;
+  padding: clamp(1rem, 5vw, 4rem);
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+  background:
+    linear-gradient(90deg, rgb(28 29 26 / 4%) 1px, transparent 1px),
+    linear-gradient(rgb(28 29 26 / 4%) 1px, transparent 1px),
+    var(--ivory-100);
+  background-size: 24px 24px;
+}
+
+.oauth-callback-card {
+  width: min(34rem, 100%);
+  padding: clamp(1.25rem, 5vw, 2.5rem);
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-top: 6px solid var(--amber-400);
+  box-shadow: var(--shadow-deep);
+}
+
+.oauth-callback-card[data-status="error"] {
+  border-top-color: var(--red-500);
+}
+
+.oauth-callback-card h1 {
+  margin: 0.7rem 0 0.65rem;
+  font-size: clamp(1.6rem, 6vw, 2.7rem);
+  line-height: 1;
+}
+
+.oauth-callback-card > p:not(.section-code) {
+  max-width: 30rem;
+  margin: 0 0 1.3rem;
+  color: var(--muted);
+}
+
+.oauth-callback-glyph {
+  width: 3rem;
+  height: 3rem;
+  margin-top: 1rem;
+  display: grid;
+  place-items: center;
+  color: var(--graphite-950);
+  background: var(--amber-300);
+  border: 2px solid var(--graphite-950);
+  font-family: var(--mono);
+  font-size: 1.35rem;
+  font-weight: 900;
+}
+
+.oauth-callback-card[data-status="error"] .oauth-callback-glyph {
+  color: var(--ivory-50);
+  background: var(--red-500);
 }
 
 .context-menu {
@@ -1964,6 +2105,24 @@ body.is-busy [data-mutation] {
 
   .ai-connection-grid .model-field {
     grid-column: auto;
+  }
+
+  .ai-connection-grid > .oauth-panel,
+  .google-oauth-fields .field:last-child {
+    grid-column: auto;
+  }
+
+  .google-oauth-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .oauth-panel-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .oauth-actions {
+    justify-content: flex-start;
   }
 
   .ai-preview-heading {

@@ -477,11 +477,17 @@
             <span class="field-label">Provider</span>
             <select id="aiProvider" name="provider">
               <option value="ollama">Ollama · local</option>
+              <option value="openrouter">OpenRouter · multi-provider</option>
               <option value="openai-compatible">Compatible API · local or hosted</option>
               <option value="openai">OpenAI API</option>
               <option value="anthropic">Anthropic API</option>
               <option value="gemini">Google Gemini API</option>
             </select>
+          </label>
+
+          <label class="field" for="aiAuthMethod" id="aiAuthMethodField" hidden>
+            <span class="field-label">Authentication</span>
+            <select id="aiAuthMethod" name="authentication"></select>
           </label>
 
           <label class="field" for="aiEndpoint" id="aiEndpointField">
@@ -494,6 +500,38 @@
             <input id="aiApiKey" name="apiKey" type="password" autocomplete="off" spellcheck="false">
             <span class="field-hint">Used for this request only. It is not written to the M18 configuration or browser storage.</span>
           </label>
+
+          <section class="oauth-panel" id="aiOauthPanel" aria-labelledby="aiOauthTitle" hidden>
+            <div class="oauth-panel-heading">
+              <div>
+                <p class="field-label" id="aiOauthTitle">Account connection</p>
+                <p class="oauth-status" id="aiOauthStatus" data-state="disconnected" role="status">
+                  <span aria-hidden="true"></span>
+                  <strong>Not connected</strong>
+                </p>
+              </div>
+              <div class="oauth-actions">
+                <button class="button button-dark button-compact" id="aiOauthConnectButton" type="button">Sign in</button>
+                <button class="button button-quiet button-compact" id="aiOauthDisconnectButton" type="button" hidden>Disconnect</button>
+              </div>
+            </div>
+
+            <div class="google-oauth-fields" id="aiGoogleOauthFields" hidden>
+              <label class="field" for="aiGoogleClientId">
+                <span class="field-label">Desktop OAuth client ID</span>
+                <input id="aiGoogleClientId" type="text" autocomplete="off" spellcheck="false" aria-describedby="aiOauthHint">
+              </label>
+              <label class="field" for="aiGoogleClientSecret">
+                <span class="field-label">Client secret <span class="optional-label">optional</span></span>
+                <input id="aiGoogleClientSecret" type="password" autocomplete="off" spellcheck="false" aria-describedby="aiOauthHint">
+              </label>
+              <label class="field" for="aiGoogleProjectId">
+                <span class="field-label">Google Cloud project ID</span>
+                <input id="aiGoogleProjectId" type="text" autocomplete="off" spellcheck="false" aria-describedby="aiOauthHint">
+              </label>
+            </div>
+            <p class="field-hint" id="aiOauthHint">Sign in opens in your browser. OAuth credentials remain in the running local controller and are never added to an M18 profile.</p>
+          </section>
 
           <div class="field model-field">
             <label class="field-label" for="aiModel">Model</label>
@@ -517,7 +555,7 @@
           <label><input type="radio" name="aiScope" value="all"> Redesign all 18 keys</label>
         </fieldset>
 
-        <p class="ai-boundary"><strong>API access:</strong> cloud chat subscriptions and API billing are separate. Generated commands are never run from this dialog; review them before saving or applying.</p>
+        <p class="ai-boundary" id="aiBoundary"><strong>API access:</strong> cloud chat subscriptions and API billing are separate. Generated commands are never run from this dialog; review them before saving or applying.</p>
         <p class="form-error" id="aiDialogError" role="alert"></p>
 
         <section class="ai-preview" id="aiPreview" aria-labelledby="aiPreviewTitle" hidden>

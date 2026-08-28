@@ -1,4 +1,4 @@
-const PROVIDERS = new Set(["ollama", "openai", "anthropic", "gemini", "openai-compatible"]);
+const PROVIDERS = new Set(["ollama", "openrouter", "openai", "anthropic", "gemini", "openai-compatible"]);
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 const MAX_PROMPT_LENGTH = 12_000;
 const MAX_PROVIDER_ERROR_LENGTH = 700;
@@ -102,9 +102,15 @@ function withPath(base, path) {
   return `${base.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
 }
 
-function cloudHeaders(provider, apiKey) {
+function cloudHeaders(provider, apiKey, input = {}) {
+  if (provider === "gemini" && input.oauthAccessToken) {
+    return {
+      Authorization: `Bearer ${requiredText(input.oauthAccessToken, "OAuth access token", 8192)}`,
+      "x-goog-user-project": requiredText(input.oauthProjectId, "Google Cloud project ID", 128),
+    };
+  }
   const key = requiredText(apiKey, "API key", 4096);
-  if (provider === "openai") return { Authorization: `Bearer ${key}` };
+  if (new Set(["openai", "openrouter"]).has(provider)) return { Authorization: `Bearer ${key}` };
   if (provider === "anthropic") {
     return { "x-api-key": key, "anthropic-version": "2023-06-01" };
   }
@@ -317,7 +323,7 @@ export class AiLayoutService {
       body = await providerFetch(
         this.fetchImplementation,
         "https://api.openai.com/v1/models",
-        { headers: cloudHeaders(provider, apiKey) },
+        { headers: cloudHeaders(provider, apiKey, input) },
         20_000,
       );
       return { provider, models: uniqueModels((body.data || []).map((model) => model?.id)) };
@@ -326,7 +332,7 @@ export class AiLayoutService {
       body = await providerFetch(
         this.fetchImplementation,
         "https://api.anthropic.com/v1/models?limit=1000",
-        { headers: cloudHeaders(provider, apiKey) },
+        { headers: cloudHeaders(provider, apiKey, input) },
         20_000,
       );
       return { provider, models: uniqueModels((body.data || []).map((model) => model?.id)) };
@@ -335,13 +341,22 @@ export class AiLayoutService {
       body = await providerFetch(
         this.fetchImplementation,
         "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000",
-        { headers: cloudHeaders(provider, apiKey) },
+        { headers: cloudHeaders(provider, apiKey, input) },
         20_000,
       );
       const models = (body.models || [])
         .filter((model) => (model?.supportedGenerationMethods || []).includes("generateContent"))
         .map((model) => String(model?.name || "").replace(/^models\//, ""));
       return { provider, models: uniqueModels(models) };
+    }
+    if (provider === "openrouter") {
+      body = await providerFetch(
+        this.fetchImplementation,
+        "https://openrouter.ai/api/v1/models",
+        { headers: cloudHeaders(provider, apiKey, input) },
+        20_000,
+      );
+      return { provider, models: uniqueModels((body.data || []).map((model) => model?.id)) };
     }
     const endpoint = normalizeEndpoint(provider, input.baseUrl);
     if (provider === "ollama") {
@@ -374,7 +389,7 @@ export class AiLayoutService {
     if (provider === "openai") {
       body = await providerFetch(this.fetchImplementation, "https://api.openai.com/v1/responses", {
         method: "POST",
-        headers: cloudHeaders(provider, apiKey),
+        headers: cloudHeaders(provider, apiKey, input),
         body: JSON.stringify({
           model,
           input: instructions,
@@ -393,7 +408,7 @@ export class AiLayoutService {
     } else if (provider === "anthropic") {
       body = await providerFetch(this.fetchImplementation, "https://api.anthropic.com/v1/messages", {
         method: "POST",
-        headers: cloudHeaders(provider, apiKey),
+        headers: cloudHeaders(provider, apiKey, input),
         body: JSON.stringify({
           model,
           max_tokens: 5000,
@@ -410,7 +425,7 @@ export class AiLayoutService {
         `https://generativelanguage.googleapis.com/v1beta/models/${encodedModel}:generateContent`,
         {
           method: "POST",
-          headers: cloudHeaders(provider, apiKey),
+          headers: cloudHeaders(provider, apiKey, input),
           body: JSON.stringify({
             contents: [{ role: "user", parts: [{ text: instructions }] }],
             generationConfig: { responseMimeType: "application/json", responseSchema: LAYOUT_SCHEMA },
@@ -418,6 +433,21 @@ export class AiLayoutService {
         },
       );
       text = (body.candidates?.[0]?.content?.parts || []).map((part) => part?.text || "").join("");
+    } else if (provider === "openrouter") {
+      body = await providerFetch(this.fetchImplementation, "https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: cloudHeaders(provider, apiKey, input),
+        body: JSON.stringify({
+          model,
+          temperature: 0.2,
+          messages: [
+            { role: "system", content: "Return only valid JSON for an M18 stream-dock layout." },
+            { role: "user", content: instructions },
+          ],
+          response_format: { type: "json_object" },
+        }),
+      });
+      text = extractMessageText(body);
     } else if (provider === "ollama") {
       const endpoint = normalizeEndpoint(provider, input.baseUrl);
       body = await providerFetch(this.fetchImplementation, withPath(endpoint, "/api/chat"), {
