@@ -80,6 +80,10 @@ async function main() {
   };
   process.once("SIGINT", () => stop("SIGINT").finally(() => process.exit(0)));
   process.once("SIGTERM", () => stop("SIGTERM").finally(() => process.exit(0)));
+  process.on("message", (message) => {
+    if (message?.type !== "vsd-m18:shutdown") return;
+    stop("parent request").finally(() => process.exit(0));
+  });
 
   try {
     await controller.initialize();

@@ -32,7 +32,7 @@ test("server publishes, protects, and clears a dynamic local instance", async (t
       VSD_M18_PORT: "0",
       VSD_M18_NO_BROWSER: "1",
     },
-    stdio: "ignore",
+    stdio: ["ignore", "ignore", "ignore", "ipc"],
   });
   let exited = false;
   const exitPromise = new Promise((resolve, reject) => {
@@ -73,8 +73,11 @@ test("server publishes, protects, and clears a dynamic local instance", async (t
   const appScript = await fetch(`${baseUrl}/app.js?v=test`);
   assert.equal(appScript.status, 200);
   assert.equal(appScript.headers.get("cache-control"), "no-cache");
+  const favicon = await fetch(`${baseUrl}/favicon.svg`);
+  assert.equal(favicon.status, 200);
+  assert.equal(favicon.headers.get("content-type"), "image/svg+xml");
 
-  child.kill("SIGTERM");
+  child.send({ type: "vsd-m18:shutdown" });
   await exitPromise;
   await assert.rejects(readFile(descriptorPath, "utf8"), { code: "ENOENT" });
 });

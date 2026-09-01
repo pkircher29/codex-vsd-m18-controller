@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { homedir } from "node:os";
-import { join, win32 } from "node:path";
+import { posix, win32 } from "node:path";
 
 export function dataDirectory(env = process.env, platform = process.platform, home = homedir()) {
   if (env.VSD_M18_DATA_HOME) return env.VSD_M18_DATA_HOME;
@@ -9,8 +9,8 @@ export function dataDirectory(env = process.env, platform = process.platform, ho
     const root = env.LOCALAPPDATA || win32.join(profile, "AppData", "Local");
     return win32.join(root, "M18Foundry");
   }
-  const root = env.XDG_DATA_HOME || join(home, ".local", "share");
-  return join(root, "vsd-m18-controller");
+  const root = env.XDG_DATA_HOME || posix.join(home, ".local", "share");
+  return posix.join(root, "vsd-m18-controller");
 }
 
 export function configDirectory(env = process.env, platform = process.platform, home = homedir()) {
@@ -20,8 +20,8 @@ export function configDirectory(env = process.env, platform = process.platform, 
     const root = env.APPDATA || win32.join(profile, "AppData", "Roaming");
     return win32.join(root, "M18Foundry");
   }
-  const root = env.XDG_CONFIG_HOME || join(home, ".config");
-  return join(root, "vsd-m18-controller");
+  const root = env.XDG_CONFIG_HOME || posix.join(home, ".config");
+  return posix.join(root, "vsd-m18-controller");
 }
 
 export function runtimeDirectory(env = process.env, platform = process.platform, home = homedir()) {
@@ -31,8 +31,8 @@ export function runtimeDirectory(env = process.env, platform = process.platform,
     const root = env.LOCALAPPDATA || win32.join(profile, "AppData", "Local");
     return win32.join(root, "M18Foundry", "runtime");
   }
-  if (env.XDG_RUNTIME_DIR) return join(env.XDG_RUNTIME_DIR, "vsd-m18-controller");
-  return join(configDirectory(env, platform, home), "runtime");
+  if (env.XDG_RUNTIME_DIR) return posix.join(env.XDG_RUNTIME_DIR, "vsd-m18-controller");
+  return posix.join(configDirectory(env, platform, home), "runtime");
 }
 
 export function createId(prefix) {
