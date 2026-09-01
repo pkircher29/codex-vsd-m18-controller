@@ -11,8 +11,8 @@
       content="Configure, test, and apply profiles for an 18-button VSDinside or Mirabox M18 Stream Dock."
     >
     <title>M18 Foundry — Stream Dock setup</title>
-    <link rel="stylesheet" href="/styles.css?v=20260828-model-select">
-    <script src="/app.js?v=20260828-model-select" defer></script>
+    <link rel="stylesheet" href="/styles.css?v=20260901-setup-wizard">
+    <script src="/app.js?v=20260901-setup-wizard" defer></script>
   </head>
 
   <body>
@@ -103,7 +103,7 @@
           <div class="panel-heading">
             <div>
               <p class="section-code">A / Profiles</p>
-              <h1 id="profilesTitle">Work sets</h1>
+              <h1 id="profilesTitle" tabindex="-1">Work sets</h1>
             </div>
             <span class="count-badge" id="profileCount" aria-label="0 profiles">00</span>
           </div>
@@ -440,8 +440,92 @@
 
     <footer class="site-footer">
       <p>M18 Foundry <span aria-hidden="true">/</span> local-only control plane</p>
-      <p>Changes stay in draft until saved or applied.</p>
+      <div class="site-footer-actions">
+        <button class="footer-link" id="setupGuideButton" type="button">Setup guide</button>
+        <p>Changes stay in draft until saved or applied.</p>
+      </div>
     </footer>
+
+    <dialog
+      class="modal setup-wizard"
+      id="setupWizard"
+      aria-labelledby="setupWizardTitle"
+      aria-describedby="setupWizardDescription"
+    >
+      <form id="setupWizardForm" novalidate>
+        <div class="setup-wizard-heading">
+          <div class="modal-index" aria-hidden="true">01</div>
+          <div class="modal-copy">
+            <p class="section-code">First run / guided setup</p>
+            <h2 id="setupWizardTitle">Set up M18 Foundry</h2>
+            <p id="setupWizardDescription">Connect the dock, name the starter profile, and choose when hardware updates happen.</p>
+          </div>
+        </div>
+
+        <ol class="setup-progress" aria-label="Setup progress">
+          <li data-setup-progress="1"><span>01</span> Start</li>
+          <li data-setup-progress="2"><span>02</span> Device</li>
+          <li data-setup-progress="3"><span>03</span> Profile</li>
+        </ol>
+
+        <section class="setup-step" data-setup-step="1" aria-labelledby="setupWelcomeTitle">
+          <p class="section-code">Step 1 of 3</p>
+          <h3 id="setupWelcomeTitle">A safe local workspace</h3>
+          <p>M18 Foundry runs on this computer and talks directly to a supported VSDinside or Mirabox M18.</p>
+          <ul class="setup-feature-list">
+            <li><strong>Preview first.</strong> Layout edits remain drafts until you save or apply them.</li>
+            <li><strong>No shell handoff.</strong> Commands use exact executable and argument boundaries.</li>
+            <li><strong>No surprise actions.</strong> Setup can write key artwork, but it never presses a configured button.</li>
+          </ul>
+        </section>
+
+        <section class="setup-step" data-setup-step="2" aria-labelledby="setupDeviceTitle" hidden>
+          <p class="section-code">Step 2 of 3</p>
+          <h3 id="setupDeviceTitle">Check the connection</h3>
+          <div class="setup-device-card" id="setupDeviceCard" data-tone="neutral" role="status" aria-live="polite">
+            <span class="setup-device-mark" aria-hidden="true"></span>
+            <div>
+              <strong id="setupDeviceStatus">Inspecting USB</strong>
+              <p id="setupDeviceDetail">Waiting for the local controller.</p>
+            </div>
+          </div>
+          <p class="setup-device-help" id="setupDeviceHelp">Connect the dock directly, then check again.</p>
+          <button class="button button-quiet" id="setupCheckDeviceButton" type="button">
+            <svg class="icon" aria-hidden="true"><use href="#icon-retry"></use></svg>
+            Check again
+          </button>
+        </section>
+
+        <section class="setup-step" data-setup-step="3" aria-labelledby="setupProfileTitle" hidden>
+          <p class="section-code">Step 3 of 3</p>
+          <h3 id="setupProfileTitle">Prepare the first profile</h3>
+          <label class="field" for="setupProfileName">
+            <span class="field-label">Profile name</span>
+            <input id="setupProfileName" name="setupProfileName" type="text" maxlength="64" required autocomplete="off">
+            <span class="field-hint">You can add, duplicate, or rename key assignments later.</span>
+          </label>
+          <fieldset class="setup-options">
+            <legend class="visually-hidden">Hardware update choices</legend>
+            <label class="setup-check">
+              <input id="setupApplyNow" type="checkbox" checked>
+              <span><strong>Apply the starter layout now</strong><small>Writes labels to the 15 LCD keys without running actions.</small></span>
+            </label>
+            <label class="setup-check">
+              <input id="setupAutoApply" type="checkbox">
+              <span><strong>Apply automatically after reconnecting</strong><small>Keep off when another dock application may use the device.</small></span>
+            </label>
+          </fieldset>
+        </section>
+
+        <p class="form-error" id="setupWizardError" role="alert"></p>
+        <div class="modal-actions setup-wizard-actions">
+          <button class="button button-quiet setup-skip" id="setupSkipButton" type="button">Skip for now</button>
+          <button class="button button-quiet" id="setupBackButton" type="button" hidden>Back</button>
+          <button class="button button-primary" id="setupNextButton" type="button">Check device</button>
+          <button class="button button-primary" id="setupFinishButton" type="submit" hidden>Finish setup</button>
+        </div>
+      </form>
+    </dialog>
 
     <dialog class="modal" id="profileDialog" aria-labelledby="profileDialogTitle">
       <form method="dialog" id="profileDialogForm">

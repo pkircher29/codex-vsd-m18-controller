@@ -219,6 +219,13 @@ test("HTTP API is loopback-scoped and rejects unmarked mutations", async (t) => 
   });
   assert.equal(stringConfirmation.status, 400);
 
+  const scan = await fetch(`${server.url}/api/device/scan`, {
+    method: "POST",
+    headers: { "X-VSD-Local-Client": "ui", ...instanceHeaders },
+  });
+  assert.equal(scan.status, 200);
+  assert.equal((await scan.json()).device.state, "connected");
+
   const finalProfile = await fetch(
     `${server.url}/api/profiles/${encodeURIComponent(state.config.activeProfileId)}`,
     {

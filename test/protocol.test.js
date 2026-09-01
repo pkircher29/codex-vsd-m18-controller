@@ -68,6 +68,7 @@ test("rendered LCD artwork is native 64x64 JPEG with a JFIF APP0 marker", async 
   const metadata = await sharp(jpeg).metadata();
   assert.equal(metadata.width, 64);
   assert.equal(metadata.height, 64);
+  assert.equal(metadata.isProgressive, false);
   const { data: sample } = await sharp(jpeg)
     .extract({ left: 16, top: 16, width: 1, height: 1 })
     .removeAlpha()

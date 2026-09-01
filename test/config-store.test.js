@@ -10,12 +10,23 @@ test("default configuration has a complete 18-key profile", () => {
   const config = validateConfig(createDefaultConfig());
   assert.equal(config.schemaVersion, 1);
   assert.equal(config.revision, 0);
+  assert.equal(config.setup.completed, false);
   assert.equal(config.profiles.length, 1);
   assert.equal(config.profiles[0].keys.length, 18);
   assert.deepEqual(
     config.profiles[0].keys.slice(15).map((key) => key.label),
     ["BACK", "HOME", "NEXT"],
   );
+});
+
+test("legacy configurations infer setup completion without changing the schema version", () => {
+  const legacy = createDefaultConfig();
+  legacy.revision = 3;
+  delete legacy.setup;
+  assert.equal(validateConfig(legacy).setup.completed, true);
+
+  legacy.revision = 0;
+  assert.equal(validateConfig(legacy).setup.completed, false);
 });
 
 test("configuration validation rejects invalid numeric state and bottom-key art", () => {

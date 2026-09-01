@@ -359,6 +359,11 @@ export class Controller extends EventEmitter {
     }
   }
 
+  async scanForDevice() {
+    await this.deviceManager.scan();
+    return this.getState();
+  }
+
   async stop() {
     await this.deviceManager.stop();
   }

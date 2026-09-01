@@ -2,6 +2,8 @@
 
 M18 Foundry is a Linux and Windows setup and automation controller for the 18-button VSDinside and Mirabox M18 Stream Dock. It provides a local browser workspace, persistent profiles, native 64x64 LCD artwork, brightness and LED controls, a hardware-safe HID transport, a simulator, and an MCP server with a companion Codex skill.
 
+New installations open a three-step first-run guide that checks the USB connection, prepares the starter profile, and can perform the first safe display apply. See [HELP.md](./HELP.md) for operator guidance and [SPEC.md](./SPEC.md) for the product, configuration, API, and HID contracts.
+
 Supported USB identities:
 
 - VSDinside M18 — `5548:1000`
@@ -31,6 +33,8 @@ npm run demo
 ```
 
 The demo opens the complete application against an in-memory M18 simulator. It does not access USB hardware. If a browser does not open, run `node scripts/open-controller.js` from another terminal; the launcher discovers the private local instance and opens its authenticated URL.
+
+The first-run guide appears for a fresh configuration. Choose **Skip for now** to explore without completing it, or finish the guide to save a profile name and optional auto-apply preference. You can reopen it later with **Setup guide** in the workspace footer.
 
 ## Linux installation
 
@@ -99,7 +103,7 @@ The HTTP service binds to an operating-system-assigned loopback port by default,
 - Output reports are fixed-size and short writes fail the connection.
 - Complete JPEG transfers are placed on one write queue, so heartbeats and other commands cannot interleave with image data.
 - Physical presses execute the last fully applied profile snapshot. Newly saved actions cannot silently outrun old key artwork, and presses are blocked during or before a complete apply.
-- Native 64x64 JPEGs are size-bounded and include a JFIF marker for firmware compatibility.
+- Native 64x64 JPEGs are size-bounded, baseline encoded, and include a JFIF marker for firmware compatibility.
 - Key-image commit behavior is selected per known product revision.
 - Linux hotplug uses udev events and Windows uses native device-change events, with a slow reconciliation scan only as a fallback.
 - No API flashes firmware or accepts arbitrary HID packets.

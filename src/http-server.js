@@ -344,6 +344,9 @@ export class ControllerHttpServer {
       });
       return sendJson(response, 200, { result, state: this.controller.getState() });
     }
+    if (request.method === "POST" && url.pathname === "/api/device/scan") {
+      return sendJson(response, 200, await this.controller.scanForDevice());
+    }
     if (request.method === "POST" && url.pathname === "/api/device/brightness") {
       const body = await readJson(request);
       await this.controller.setBrightness(body);

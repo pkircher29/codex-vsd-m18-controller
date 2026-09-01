@@ -205,7 +205,9 @@ export async function renderKeyJpeg(key, assetStore) {
     const encoded = await pipeline
       .clone()
       .flatten({ background: key.color })
-      .jpeg({ quality, chromaSubsampling: "4:2:0", mozjpeg: true })
+      // The M18's embedded decoder silently rejects progressive JPEGs. MozJPEG's
+      // scan optimization enables progressive output, so force a baseline stream.
+      .jpeg({ quality, chromaSubsampling: "4:2:0", progressive: false, mozjpeg: false })
       .toBuffer();
     const jpeg = ensureJfifApp0(encoded);
     if (jpeg.length <= 10240) return jpeg;

@@ -1,5 +1,5 @@
 export const APP_NAME = "M18 Foundry";
-export const APP_VERSION = "0.1.0";
+export const APP_VERSION = "0.2.0";
 export const DEFAULT_HOST = "127.0.0.1";
 export const DEFAULT_PORT = 0;
 export const KEY_COUNT = 18;

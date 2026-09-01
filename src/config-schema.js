@@ -162,10 +162,18 @@ export function validateConfig(raw) {
   if (typeof device.autoApply !== "boolean") {
     throw new TypeError("config.device.autoApply must be true or false");
   }
+  const setup = config.setup == null ? null : expectObject(config.setup, "config.setup");
+  const setupCompleted = setup == null ? config.revision > 0 : setup.completed;
+  if (typeof setupCompleted !== "boolean") {
+    throw new TypeError("config.setup.completed must be true or false");
+  }
   return {
     schemaVersion: CONFIG_SCHEMA_VERSION,
     revision: config.revision,
     activeProfileId,
+    setup: {
+      completed: setupCompleted,
+    },
     device: {
       brightness: clamp(Math.round(brightness), 0, 100),
       ledColor: cleanColor(device.ledColor, "config.device.ledColor"),
@@ -196,6 +204,9 @@ export function createDefaultConfig() {
     schemaVersion: CONFIG_SCHEMA_VERSION,
     revision: 0,
     activeProfileId: profile.id,
+    setup: {
+      completed: false,
+    },
     device: {
       brightness: 72,
       ledColor: "#E59B3A",

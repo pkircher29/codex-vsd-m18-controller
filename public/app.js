@@ -162,6 +162,22 @@ const elements = {
   confirmDialogTitle: byId("confirmDialogTitle"),
   confirmDialogMessage: byId("confirmDialogMessage"),
   confirmDialogButton: byId("confirmDialogButton"),
+  setupGuideButton: byId("setupGuideButton"),
+  setupWizard: byId("setupWizard"),
+  setupWizardForm: byId("setupWizardForm"),
+  setupDeviceCard: byId("setupDeviceCard"),
+  setupDeviceStatus: byId("setupDeviceStatus"),
+  setupDeviceDetail: byId("setupDeviceDetail"),
+  setupDeviceHelp: byId("setupDeviceHelp"),
+  setupCheckDeviceButton: byId("setupCheckDeviceButton"),
+  setupProfileName: byId("setupProfileName"),
+  setupApplyNow: byId("setupApplyNow"),
+  setupAutoApply: byId("setupAutoApply"),
+  setupWizardError: byId("setupWizardError"),
+  setupSkipButton: byId("setupSkipButton"),
+  setupBackButton: byId("setupBackButton"),
+  setupNextButton: byId("setupNextButton"),
+  setupFinishButton: byId("setupFinishButton"),
   toastRegion: byId("toastRegion"),
   keyContextMenu: byId("keyContextMenu"),
   contextPasteCommand: byId("contextPasteCommand"),
@@ -194,6 +210,9 @@ const ui = {
   confirmOpener: null,
   lastRenderedEventId: "",
   staleToastShown: false,
+  setupStep: 1,
+  setupShown: false,
+  setupOpener: null,
 };
 
 let mutationTail = Promise.resolve();
@@ -434,6 +453,7 @@ async function loadState({ preserveDraft = false } = {}) {
   elements.errorPanel.hidden = true;
   elements.workspaceGrid.hidden = false;
   elements.workspace.setAttribute("aria-busy", "false");
+  requestAnimationFrame(maybeOpenSetupWizard);
 }
 
 function connectEventStream() {
@@ -474,6 +494,7 @@ function renderAll() {
   renderRevision();
   renderControlAvailability();
   renderRecoveryNotice();
+  renderSetupWizard();
 }
 
 function renderTransient() {
@@ -484,6 +505,7 @@ function renderTransient() {
   renderRevision();
   renderControlAvailability();
   renderRecoveryNotice();
+  renderSetupWizard();
 }
 
 function setStatusCell(cell, valueElement, detailElement, { tone, value, detail }) {
@@ -1133,6 +1155,182 @@ function renderRecoveryNotice() {
   }
   elements.recoveryNoticeText.textContent = notice;
   elements.recoveryNotice.hidden = false;
+}
+
+function setupConnectionPresentation() {
+  const status = ui.serverState?.device || {};
+  const identity = status.device;
+  const state = status.state || "starting";
+  const simulated = Boolean(identity?.simulated) || status.mode === "mock";
+  if (state === "connected") {
+    return {
+      connected: true,
+      tone: simulated ? "warning" : "good",
+      title: simulated ? "Simulator connected" : `${identity?.model || "M18"} connected`,
+      detail: simulated
+        ? "Hardware writes stay inside the in-memory simulator."
+        : `${formatUsbId(identity)} · serial ${identity?.serialNumber || "unknown"}`,
+      help: simulated
+        ? "This is safe for learning the workspace. Start in real mode to configure a physical dock."
+        : "The vendor HID interface is open and ready for a display test.",
+    };
+  }
+  if (state === "permission") {
+    return {
+      connected: false,
+      tone: "danger",
+      title: "M18 found, access blocked",
+      detail: status.message || "The operating system denied access to the vendor HID interface.",
+      help: "Run the platform installer, reconnect the dock, then check again.",
+    };
+  }
+  if (state === "error") {
+    return {
+      connected: false,
+      tone: "danger",
+      title: "Device check failed",
+      detail: status.message || "The controller could not inspect the M18.",
+      help: "Close other dock software, reconnect the unit, and check again.",
+    };
+  }
+  return {
+    connected: false,
+    tone: state === "starting" ? "neutral" : "warning",
+    title: state === "starting" ? "Inspecting USB" : "No supported M18 connected",
+    detail: status.message || "Waiting for a supported USB identity.",
+    help: "Connect the dock directly, wait a moment, then check again. You can continue without hardware.",
+  };
+}
+
+function renderSetupWizard() {
+  if (!elements.setupWizard.open) return;
+  const step = Math.max(1, Math.min(3, ui.setupStep));
+  ui.setupStep = step;
+  for (const section of elements.setupWizard.querySelectorAll("[data-setup-step]")) {
+    section.hidden = Number(section.dataset.setupStep) !== step;
+  }
+  for (const item of elements.setupWizard.querySelectorAll("[data-setup-progress]")) {
+    if (Number(item.dataset.setupProgress) === step) item.setAttribute("aria-current", "step");
+    else item.removeAttribute("aria-current");
+  }
+
+  const connection = setupConnectionPresentation();
+  elements.setupDeviceCard.dataset.tone = connection.tone;
+  elements.setupDeviceStatus.textContent = connection.title;
+  elements.setupDeviceDetail.textContent = connection.detail;
+  elements.setupDeviceHelp.textContent = connection.help;
+  if (!connection.connected) elements.setupApplyNow.checked = false;
+  elements.setupApplyNow.disabled = !connection.connected || ui.busyCount > 0;
+  elements.setupCheckDeviceButton.disabled = ui.busyCount > 0;
+  elements.setupBackButton.disabled = ui.busyCount > 0;
+  elements.setupNextButton.disabled = ui.busyCount > 0;
+  elements.setupFinishButton.disabled = ui.busyCount > 0;
+  elements.setupSkipButton.disabled = ui.busyCount > 0;
+
+  elements.setupBackButton.hidden = step === 1;
+  elements.setupNextButton.hidden = step === 3;
+  elements.setupFinishButton.hidden = step !== 3;
+  elements.setupNextButton.textContent = step === 1 ? "Check device" : "Profile options";
+}
+
+function focusSetupStep() {
+  const heading = elements.setupWizard.querySelector(`[data-setup-step="${ui.setupStep}"] h3`);
+  if (!heading) return;
+  heading.setAttribute("tabindex", "-1");
+  heading.focus();
+}
+
+function openSetupWizard({ manual = false } = {}) {
+  if (!ui.draftConfig || !ui.serverState || elements.setupWizard.open) return;
+  ui.setupShown = true;
+  ui.setupStep = 1;
+  ui.setupOpener = manual ? document.activeElement : null;
+  elements.setupProfileName.value = activeProfile()?.name || "Main";
+  elements.setupAutoApply.checked = Boolean(ui.draftConfig.device?.autoApply);
+  elements.setupApplyNow.checked = setupConnectionPresentation().connected;
+  elements.setupWizardError.textContent = "";
+  elements.setupProfileName.removeAttribute("aria-invalid");
+  elements.setupWizard.returnValue = "";
+  elements.setupWizard.showModal();
+  renderSetupWizard();
+  requestAnimationFrame(() => elements.setupNextButton.focus());
+}
+
+function maybeOpenSetupWizard() {
+  if (ui.setupShown || ui.serverState?.config?.setup?.completed !== false) return;
+  openSetupWizard();
+}
+
+function closeSetupWizard(value = "cancel") {
+  if (elements.setupWizard.open) elements.setupWizard.close(value);
+}
+
+function moveSetupStep(direction) {
+  ui.setupStep = Math.max(1, Math.min(3, ui.setupStep + direction));
+  elements.setupWizardError.textContent = "";
+  renderSetupWizard();
+  requestAnimationFrame(focusSetupStep);
+}
+
+function finishSetup() {
+  const name = elements.setupProfileName.value.trim();
+  if (!name) {
+    elements.setupProfileName.setAttribute("aria-invalid", "true");
+    elements.setupProfileName.setAttribute("aria-describedby", elements.setupWizardError.id);
+    elements.setupWizardError.textContent = "Enter a profile name.";
+    elements.setupProfileName.focus();
+    return;
+  }
+
+  runMutation("Finishing guided setup", async () => {
+    const profile = activeProfile();
+    if (!profile) throw new Error("The starter profile is missing");
+    const autoApply = elements.setupAutoApply.checked;
+    const applyNow = elements.setupApplyNow.checked && setupConnectionPresentation().connected;
+    const changed =
+      profile.name !== name ||
+      ui.draftConfig.device.autoApply !== autoApply ||
+      ui.draftConfig.setup?.completed !== true;
+    profile.name = name;
+    ui.draftConfig.device.autoApply = autoApply;
+    ui.draftConfig.setup = { completed: true };
+    if (changed) {
+      markDirty();
+      renderRevision();
+    }
+
+    try {
+      const saved = await persistDraft();
+      if (!saved) {
+        elements.setupWizardError.textContent = "Setup could not be saved. Review the current configuration and try again.";
+        return;
+      }
+      let applied = false;
+      if (applyNow) {
+        const response = await apiRequest("/api/device/apply", {
+          method: "POST",
+          json: {
+            profileId: saved.config.activeProfileId,
+            expectedRevision: saved.config.revision,
+          },
+        });
+        const nextState = stateFromResponse(response);
+        if (nextState) adoptServerState(nextState, { replaceDraft: true, source: "response" });
+        applied = Boolean(response?.result?.applied);
+      }
+      closeSetupWizard("complete");
+      showToast({
+        tone: "success",
+        title: "Setup complete",
+        message: applied
+          ? "The starter profile was saved and written to all 15 LCD keys."
+          : "The starter profile was saved. Apply it when an M18 is connected.",
+      });
+    } catch (error) {
+      elements.setupWizardError.textContent = error?.message || "Setup could not be completed.";
+      throw error;
+    }
+  });
 }
 
 function formatRelativeTime(value) {
@@ -1973,6 +2171,40 @@ function wireEvents() {
   elements.dismissRecovery.addEventListener("click", () => {
     elements.recoveryNotice.dataset.dismissed = ui.serverState?.recoveryNotice || "dismissed";
     elements.recoveryNotice.hidden = true;
+  });
+
+  elements.setupGuideButton.addEventListener("click", () => openSetupWizard({ manual: true }));
+  elements.setupSkipButton.addEventListener("click", () => closeSetupWizard("skip"));
+  elements.setupBackButton.addEventListener("click", () => moveSetupStep(-1));
+  elements.setupNextButton.addEventListener("click", () => moveSetupStep(1));
+  elements.setupCheckDeviceButton.addEventListener("click", () => {
+    runMutation("Checking the USB connection", async () => {
+      const nextState = await apiRequest("/api/device/scan", { method: "POST" });
+      adoptServerState(nextState, { source: "response" });
+      renderSetupWizard();
+      showToast({
+        tone: nextState.device?.state === "connected" ? "success" : "info",
+        title: nextState.device?.state === "connected" ? "M18 ready" : "Device check complete",
+        message: nextState.device?.message || "The controller finished scanning USB devices.",
+      });
+    });
+  });
+  elements.setupWizardForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    finishSetup();
+  });
+  elements.setupProfileName.addEventListener("input", () => {
+    elements.setupProfileName.removeAttribute("aria-invalid");
+    elements.setupProfileName.removeAttribute("aria-describedby");
+    elements.setupWizardError.textContent = "";
+  });
+  elements.setupWizard.addEventListener("cancel", (event) => {
+    if (ui.busyCount > 0) event.preventDefault();
+  });
+  elements.setupWizard.addEventListener("close", () => {
+    const returnTarget = ui.setupOpener || byId("profilesTitle");
+    requestAnimationFrame(() => returnTarget?.focus?.());
+    ui.setupOpener = null;
   });
 
   elements.aiLayoutButton.addEventListener("click", openAiDialog);
