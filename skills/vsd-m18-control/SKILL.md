@@ -5,7 +5,7 @@ description: Inspect, configure, render, and safely trigger VSDinside or Mirabox
 
 # VSD M18 Control
 
-Use the `vsdM18` MCP tools as the control plane. Start with `dock_status`; report a disconnected, permission, or recovery state before proposing mutations.
+Use the `vsdM18` MCP tools as the control plane. Stored profiles are the M18's ordered control pages. Start with `dock_status`; report a disconnected, permission, or recovery state before proposing mutations.
 
 Also inspect `appliedState` before describing physical behavior. A null value means no complete layout has been verified since connection; `inSync=false` means saved edits differ from the dock. Physical presses use the last fully applied action snapshot and are blocked until the first successful apply.
 
@@ -22,7 +22,7 @@ Never infer permission to run a configured command or open a URL. Immediately be
 
 `set_active_profile` saves activation first and applies hardware second when `apply=true`. If its result reports an application error, re-read state, do not trigger a button, and explain that stored activation succeeded while the physical display did not update.
 
-LCD artwork applies to keys 1-15. Keys 16-18 are physical non-LCD buttons. Do not attach an image asset to those three buttons. Preserve exact executable/argument boundaries for command actions; the controller intentionally does not invoke a shell.
+LCD artwork and user actions apply to keys 1-15. Keys 16-18 are reserved physical navigation buttons: 16 goes to the previous page, 17 returns to page 1, and 18 goes to the next page; previous and next wrap. Never assign an image or user action to these keys. The controller normalizes older bindings on them to navigation and must never execute those legacy actions. Preserve exact executable/argument boundaries for command actions on LCD keys; the controller intentionally does not invoke a shell.
 
 For a Linux `permission` state, direct the user to the repository's `scripts/install-linux.sh` and tell them the dock must be reconnected once. Do not weaken udev permissions or substitute a world-writable rule. On Windows, the controller uses the native HID interface without a bundled driver; ask the user to close other dock software and reconnect the M18. Do not recommend changing device drivers unless diagnosis identifies a separate driver problem.
 

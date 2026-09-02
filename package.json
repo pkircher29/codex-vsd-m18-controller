@@ -1,6 +1,6 @@
 {
   "name": "codex-vsd-m18-controller",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Cross-platform setup and automation controller for VSDinside and Mirabox M18 Stream Docks",
   "type": "module",
   "private": true,

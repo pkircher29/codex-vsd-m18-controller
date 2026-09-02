@@ -1,5 +1,5 @@
 export const APP_NAME = "M18 Foundry";
-export const APP_VERSION = "0.2.0";
+export const APP_VERSION = "0.2.1";
 export const DEFAULT_HOST = "127.0.0.1";
 export const DEFAULT_PORT = 0;
 export const KEY_COUNT = 18;
@@ -43,4 +43,10 @@ export const DEFAULT_KEY_COLORS = Object.freeze([
   "#6F7F83",
   "#A28B53",
   "#806F94",
+]);
+
+export const PAGE_NAVIGATION_KEYS = Object.freeze([
+  Object.freeze({ index: 16, label: "BACK", target: "previous" }),
+  Object.freeze({ index: 17, label: "HOME", target: "first" }),
+  Object.freeze({ index: 18, label: "NEXT", target: "next" }),
 ]);

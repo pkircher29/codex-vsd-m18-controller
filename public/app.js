@@ -8,11 +8,17 @@ const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const INSTANCE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const AI_OAUTH_PROVIDERS = new Set(["openrouter", "gemini"]);
 const AI_MANUAL_MODEL_VALUE = "__m18_manual_model__";
+const PAGE_NAVIGATION = Object.freeze({
+  16: Object.freeze({ label: "BACK", target: "previous", description: "Previous page" }),
+  17: Object.freeze({ label: "HOME", target: "first", description: "Page 1" }),
+  18: Object.freeze({ label: "NEXT", target: "next", description: "Next page" }),
+});
 const ACTION_LABELS = Object.freeze({
   none: "No action",
   command: "Run command",
   url: "Open URL",
-  profile: "Switch profile",
+  profile: "Go to page",
+  navigation: "Page navigation",
 });
 
 function consumeInstanceToken() {
@@ -315,7 +321,7 @@ function executionSnapshot(state, keyIndex) {
     (entry) => entry.id === state.config.activeProfileId,
   );
   const key = profile?.keys[keyIndex - 1];
-  if (!profile || !key) throw new Error("The selected key is missing from the saved profile");
+  if (!profile || !key) throw new Error("The selected key is missing from the saved page");
   return {
     profileId: profile.id,
     expectedRevision: state.config.revision,
@@ -364,7 +370,10 @@ function actionSummary(action) {
   if (action.type === "url") return action.url || "Incomplete URL";
   if (action.type === "profile") {
     const profile = ui.draftConfig?.profiles.find((entry) => entry.id === action.profileId);
-    return `Switch to ${profile?.name || "missing profile"}`;
+    return `Go to ${profile?.name || "missing page"}`;
+  }
+  if (action.type === "navigation") {
+    return { previous: "Previous page", first: "Page 1", next: "Next page" }[action.target] || "Page navigation";
   }
   return "Unknown action";
 }
@@ -673,7 +682,7 @@ function renderProfiles() {
     const name = document.createElement("span");
     const meta = document.createElement("span");
     const arrow = document.createElement("span");
-    const assigned = profile.keys.filter((key) => key.action.type !== "none").length;
+    const assigned = profile.keys.slice(0, 15).filter((key) => key.action.type !== "none").length;
 
     button.type = "button";
     button.className = "profile-button";
@@ -681,12 +690,12 @@ function renderProfiles() {
     button.setAttribute("aria-pressed", String(profile.id === activeId));
     button.setAttribute(
       "aria-label",
-      `${profile.name}, profile ${index + 1} of ${profiles.length}, ${assigned} assigned actions`,
+      `${profile.name}, page ${index + 1} of ${profiles.length}, ${assigned} assigned controls`,
     );
     name.className = "profile-button-name";
     name.textContent = profile.name;
     meta.className = "profile-button-meta";
-    meta.textContent = `${assigned.toString().padStart(2, "0")} actions · 18 keys`;
+    meta.textContent = `${assigned.toString().padStart(2, "0")} controls · page ${index + 1}`;
     copy.append(name, meta);
     arrow.className = "profile-arrow";
     arrow.textContent = profile.id === activeId ? "◆" : "›";
@@ -699,8 +708,8 @@ function renderProfiles() {
 
   elements.profileList.replaceChildren(fragment);
   elements.profileCount.textContent = String(profiles.length).padStart(2, "0");
-  elements.profileCount.setAttribute("aria-label", `${profiles.length} profiles`);
-  elements.activeProfileName.textContent = activeProfile()?.name || "No profile";
+  elements.profileCount.setAttribute("aria-label", `${profiles.length} control pages`);
+  elements.activeProfileName.textContent = activeProfile()?.name || "No page";
 }
 
 function renderDeck() {
@@ -728,7 +737,11 @@ function createDeckButton(key) {
   const number = document.createElement("span");
   const label = document.createElement("span");
   const action = document.createElement("span");
-  const actionText = actionSummary(key.action);
+  const navigation = PAGE_NAVIGATION[key.index] || null;
+  const displayedAction = navigation
+    ? { type: "navigation", target: navigation.target }
+    : key.action;
+  const actionText = actionSummary(displayedAction);
 
   button.type = "button";
   button.className = `deck-key ${key.index <= 15 ? "lcd-key" : "hardware-key"}`;
@@ -738,12 +751,18 @@ function createDeckButton(key) {
   button.style.setProperty("--key-text", keyTextColor(keyColor));
   button.style.setProperty("--key-shadow", keyTextShadow(keyColor));
   if (key.index <= 15) button.style.backgroundColor = keyColor;
-  button.setAttribute("aria-pressed", String(key.index === ui.selectedKey));
-  button.setAttribute("aria-describedby", "dropGuidance");
-  button.setAttribute(
-    "aria-label",
-    `Key ${key.index}, ${key.label || "unlabeled"}. ${actionText}. Select for editing.`,
-  );
+  if (!navigation) {
+    button.setAttribute("aria-pressed", String(key.index === ui.selectedKey));
+    button.setAttribute("aria-describedby", "dropGuidance");
+    button.setAttribute(
+      "aria-label",
+      `Key ${key.index}, ${key.label || "unlabeled"}. ${actionText}. Select for editing.`,
+    );
+  } else {
+    button.classList.add("page-navigation-key");
+    button.dataset.navigation = navigation.target;
+    button.setAttribute("aria-label", `${navigation.description}. Show that control page in the editor.`);
+  }
   button.title = `Key ${key.index} · ${actionText}`;
   if (key.assetId && key.index <= 15) {
     button.classList.add("has-image");
@@ -756,25 +775,31 @@ function createDeckButton(key) {
   number.textContent = padKey(key.index);
   number.setAttribute("aria-hidden", "true");
   label.className = "key-label";
-  label.textContent = key.label || "UNLABELED";
+  label.textContent = navigation?.label || key.label || "UNLABELED";
   label.setAttribute("aria-hidden", "true");
   action.className = "key-action-mark";
-  action.dataset.action = key.action.type;
+  action.dataset.action = displayedAction.type;
   action.setAttribute("aria-hidden", "true");
   button.append(number, label, action);
-  button.addEventListener("click", () => selectKey(key.index));
+  button.addEventListener("click", () => {
+    if (navigation) navigateDraftPage(navigation.target);
+    else selectKey(key.index);
+  });
   button.addEventListener("keydown", handleDeckNavigation);
-  button.addEventListener("contextmenu", (event) => openKeyContextMenu(event, key.index));
-  button.addEventListener("dragenter", handleKeyDragEnter);
-  button.addEventListener("dragover", handleKeyDragOver);
-  button.addEventListener("dragleave", handleKeyDragLeave);
-  button.addEventListener("drop", (event) => handleKeyDrop(event, key.index));
+  if (!navigation) {
+    button.addEventListener("contextmenu", (event) => openKeyContextMenu(event, key.index));
+    button.addEventListener("dragenter", handleKeyDragEnter);
+    button.addEventListener("dragover", handleKeyDragOver);
+    button.addEventListener("dragleave", handleKeyDragLeave);
+    button.addEventListener("drop", (event) => handleKeyDrop(event, key.index));
+  }
   return button;
 }
 
 function handleDeckNavigation(event) {
   if ((event.shiftKey && event.key === "F10") || event.key === "ContextMenu") {
     event.preventDefault();
+    if (Number(event.currentTarget.dataset.key) > 15) return;
     const rect = event.currentTarget.getBoundingClientRect();
     openKeyContextMenu(
       { preventDefault() {}, clientX: rect.left + Math.min(28, rect.width / 2), clientY: rect.top + Math.min(28, rect.height / 2) },
@@ -1062,7 +1087,7 @@ function renderOperation() {
       : "Action state unverified · apply before physical use";
   } else if (operation?.state === "complete") {
     state = "complete";
-    text = `Profile applied · ${formatRelativeTime(operation.completedAt)}`;
+    text = `Page applied · ${formatRelativeTime(operation.completedAt)}`;
   }
 
   elements.operationStrip.dataset.state = state;
@@ -1100,7 +1125,9 @@ function renderEvent() {
   } else if (event.type === "input") {
     elements.eventText.textContent = `Key ${padKey(event.key)} · ${event.pressed ? "pressed" : "released"} · ${event.source || "device"}`;
   } else if (event.type === "trigger") {
-    elements.eventText.textContent = `Key ${padKey(event.key)} · ${event.label || "Unlabeled"} · ${actionLabel({ type: event.action })}`;
+    elements.eventText.textContent = event.action === "navigation"
+      ? `Key ${padKey(event.key)} · ${event.label || "Navigation"} · page ${event.result?.page || "—"} of ${event.result?.pageCount || "—"}`
+      : `Key ${padKey(event.key)} · ${event.label || "Unlabeled"} · ${actionLabel({ type: event.action })}`;
   } else {
     elements.eventText.textContent = event.message || `Key ${event.key || "—"} signal received`;
   }
@@ -1230,7 +1257,7 @@ function renderSetupWizard() {
   elements.setupBackButton.hidden = step === 1;
   elements.setupNextButton.hidden = step === 3;
   elements.setupFinishButton.hidden = step !== 3;
-  elements.setupNextButton.textContent = step === 1 ? "Check device" : "Profile options";
+  elements.setupNextButton.textContent = step === 1 ? "Check device" : "Page options";
 }
 
 function focusSetupStep() {
@@ -1277,14 +1304,14 @@ function finishSetup() {
   if (!name) {
     elements.setupProfileName.setAttribute("aria-invalid", "true");
     elements.setupProfileName.setAttribute("aria-describedby", elements.setupWizardError.id);
-    elements.setupWizardError.textContent = "Enter a profile name.";
+    elements.setupWizardError.textContent = "Enter a page name.";
     elements.setupProfileName.focus();
     return;
   }
 
   runMutation("Finishing guided setup", async () => {
     const profile = activeProfile();
-    if (!profile) throw new Error("The starter profile is missing");
+    if (!profile) throw new Error("The starter page is missing");
     const autoApply = elements.setupAutoApply.checked;
     const applyNow = elements.setupApplyNow.checked && setupConnectionPresentation().connected;
     const changed =
@@ -1323,8 +1350,8 @@ function finishSetup() {
         tone: "success",
         title: "Setup complete",
         message: applied
-          ? "The starter profile was saved and written to all 15 LCD keys."
-          : "The starter profile was saved. Apply it when an M18 is connected.",
+          ? "The first page was saved and written to all 15 LCD keys."
+          : "The first page was saved. Apply it when an M18 is connected.",
       });
     } catch (error) {
       elements.setupWizardError.textContent = error?.message || "Setup could not be completed.";
@@ -1357,6 +1384,29 @@ function selectProfile(profileId) {
   renderRevision();
   renderOperation();
   renderControlAvailability();
+}
+
+function navigateDraftPage(target) {
+  const profiles = ui.draftConfig?.profiles || [];
+  if (!profiles.length) return;
+  const currentIndex = Math.max(0, profiles.findIndex((profile) => profile.id === ui.draftConfig.activeProfileId));
+  const targetIndex = target === "first"
+    ? 0
+    : target === "previous"
+      ? (currentIndex - 1 + profiles.length) % profiles.length
+      : (currentIndex + 1) % profiles.length;
+  const targetProfile = profiles[targetIndex];
+  selectProfile(targetProfile.id);
+  showToast({
+    tone: "info",
+    title: `Page ${targetIndex + 1} of ${profiles.length}`,
+    message: targetProfile.id === ui.serverState?.config?.activeProfileId
+      ? `“${targetProfile.name}” is already the saved page.`
+      : `Editing “${targetProfile.name}”. Save or apply to make it the active hardware page.`,
+  });
+  requestAnimationFrame(() => {
+    document.querySelector(`.page-navigation-key[data-navigation="${target}"]`)?.focus();
+  });
 }
 
 function selectKey(index) {
@@ -1411,7 +1461,7 @@ function validateDraft() {
   const profileIds = new Set(ui.draftConfig.profiles.map((profile) => profile.id));
   for (const profile of ui.draftConfig.profiles) {
     if (!profile.name.trim()) {
-      throw new UiValidationError("A profile name cannot be empty", { profileId: profile.id });
+      throw new UiValidationError("A page name cannot be empty", { profileId: profile.id });
     }
     for (const key of profile.keys) {
       const location = { profileId: profile.id, key: key.index };
@@ -1442,7 +1492,7 @@ function validateDraft() {
         }
       }
       if (key.action.type === "profile" && !profileIds.has(key.action.profileId)) {
-        throw new UiValidationError(`Key ${key.index} points to a missing profile`, {
+        throw new UiValidationError(`Key ${key.index} points to a missing page`, {
           ...location,
           field: "targetProfile",
         });
@@ -1571,12 +1621,12 @@ function openProfileDialog(mode) {
   ui.profileDialogMode = mode;
   ui.dialogOpener = document.activeElement;
   const duplicate = mode === "duplicate";
-  elements.profileDialogTitle.textContent = duplicate ? "Duplicate profile" : "Create profile";
+  elements.profileDialogTitle.textContent = duplicate ? "Duplicate page" : "Create page";
   elements.profileDialogDescription.textContent = duplicate
-    ? `Copy all 18 keys from “${activeProfile().name}”.`
-    : "Start with a clean 18-button layout.";
+    ? `Copy the 15 controls from “${activeProfile().name}”.`
+    : "Start with a clean 15-control page.";
   elements.submitProfileDialog.textContent = duplicate ? "Duplicate" : "Create";
-  elements.profileName.value = duplicate ? `${activeProfile().name} Copy` : "New Profile";
+  elements.profileName.value = duplicate ? `${activeProfile().name} Copy` : "New Page";
   elements.profileDialogError.textContent = "";
   elements.profileName.removeAttribute("aria-invalid");
   elements.profileDialog.returnValue = "";
@@ -2061,7 +2111,7 @@ async function generateAiLayout() {
   elements.aiDialogError.textContent = "";
   elements.aiPreview.hidden = true;
   ui.aiProposal = null;
-  setAiBusy(true, "Generating an 18-key draft…");
+  setAiBusy(true, "Generating a 15-control page…");
   try {
     const scope = elements.aiDialogForm.elements.aiScope.value === "empty" ? "empty" : "all";
     const response = await apiRequest("/api/ai/layout", {
@@ -2092,6 +2142,7 @@ function acceptAiLayout() {
   if (!proposal?.layout?.keys || !profile) return;
   let changed = 0;
   for (const generated of proposal.layout.keys) {
+    if (generated.index > 15) continue;
     const key = profile.keys[generated.index - 1];
     if (!key) continue;
     if (proposal.scope === "empty" && key.action.type !== "none") continue;
@@ -2101,7 +2152,7 @@ function acceptAiLayout() {
     changed += 1;
   }
   if (!changed) {
-    elements.aiDialogError.textContent = "No unassigned keys were available. Choose “Redesign all 18 keys” to replace the current layout.";
+    elements.aiDialogError.textContent = "No unassigned LCD keys were available. Choose “Redesign all 15 controls” to replace the current page.";
     return;
   }
   markDirty();
@@ -2110,7 +2161,7 @@ function acceptAiLayout() {
   showToast({
     tone: "success",
     title: "AI layout staged",
-    message: `${changed} key${changed === 1 ? "" : "s"} updated as an unsaved draft. Review every command before applying.`,
+    message: `${Math.min(changed, 15)} control${changed === 1 ? "" : "s"} updated as an unsaved draft. Review every command before applying.`,
     duration: 9000,
   });
 }
@@ -2304,12 +2355,12 @@ function wireEvents() {
     const confirmed = await askForConfirmation({
       kicker: "Destructive operation",
       title: `Delete “${profile.name}”?`,
-      message: "This permanently removes the profile. Keys in other profiles that point to it will be reset to no action.",
-      confirmLabel: "Delete profile",
+      message: "This permanently removes the page. LCD keys on other pages that point to it will be reset to no action.",
+      confirmLabel: "Delete page",
       danger: true,
     });
     if (!confirmed) return;
-    runMutation("Deleting profile", async () => {
+    runMutation("Deleting page", async () => {
       const saved = await persistDraft();
       if (!saved) return;
       const response = await apiRequest(`/api/profiles/${encodeURIComponent(profile.id)}`, {
@@ -2317,10 +2368,10 @@ function wireEvents() {
         json: { expectedRevision: ui.serverState.config.revision },
       });
       const nextState = stateFromResponse(response);
-      if (!nextState) throw new Error("The controller returned an invalid profile response");
+      if (!nextState) throw new Error("The controller returned an invalid page response");
       ui.selectedKey = 1;
       adoptServerState(nextState, { replaceDraft: true });
-      showToast({ tone: "success", title: "Profile deleted", message: `“${profile.name}” was removed.` });
+      showToast({ tone: "success", title: "Page deleted", message: `“${profile.name}” was removed.` });
       requestAnimationFrame(() => elements.profileList.querySelector("button")?.focus());
     });
   });
@@ -2331,13 +2382,13 @@ function wireEvents() {
     if (!name) {
       elements.profileName.setAttribute("aria-invalid", "true");
       elements.profileName.setAttribute("aria-describedby", elements.profileDialogError.id);
-      elements.profileDialogError.textContent = "Enter a profile name.";
+      elements.profileDialogError.textContent = "Enter a page name.";
       elements.profileName.focus();
       return;
     }
     const duplicateFrom = ui.profileDialogMode === "duplicate" ? activeProfile()?.id || null : null;
     closeProfileDialog();
-    runMutation(ui.profileDialogMode === "duplicate" ? "Duplicating profile" : "Creating profile", async () => {
+    runMutation(ui.profileDialogMode === "duplicate" ? "Duplicating page" : "Creating page", async () => {
       const saved = await persistDraft();
       if (!saved) return;
       const response = await apiRequest("/api/profiles", {
@@ -2349,12 +2400,12 @@ function wireEvents() {
         },
       });
       const nextState = stateFromResponse(response);
-      if (!nextState) throw new Error("The controller returned an invalid profile response");
+      if (!nextState) throw new Error("The controller returned an invalid page response");
       ui.selectedKey = 1;
       adoptServerState(nextState, { replaceDraft: true });
       showToast({
         tone: "success",
-        title: ui.profileDialogMode === "duplicate" ? "Profile duplicated" : "Profile created",
+        title: ui.profileDialogMode === "duplicate" ? "Page duplicated" : "Page created",
         message: `“${name}” is ready to edit.`,
       });
       requestAnimationFrame(() => {
@@ -2381,7 +2432,7 @@ function wireEvents() {
   });
 
   elements.applyButton.addEventListener("click", () => {
-    runMutation("Saving and applying profile", async () => {
+    runMutation("Saving and applying page", async () => {
       const saved = await persistDraft();
       if (!saved) return;
       const response = await apiRequest("/api/device/apply", {
@@ -2396,7 +2447,7 @@ function wireEvents() {
       const result = response?.result;
       showToast({
         tone: "success",
-        title: "Profile applied",
+        title: "Page applied",
         message: `${result?.keys ?? 15} LCD keys were written to the M18.`,
       });
     });

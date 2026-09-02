@@ -3,6 +3,7 @@ import {
   DEFAULT_KEY_COLORS,
   KEY_COUNT,
   LCD_KEY_COUNT,
+  PAGE_NAVIGATION_KEYS,
 } from "./constants.js";
 import { clamp, createId, jsonClone } from "./util.js";
 
@@ -100,6 +101,16 @@ function cleanKey(raw, expectedIndex, label) {
   if (expectedIndex > LCD_KEY_COUNT && assetId) {
     throw new TypeError(`${label}.assetId is only valid for LCD keys 1-${LCD_KEY_COUNT}`);
   }
+  const navigation = PAGE_NAVIGATION_KEYS.find((entry) => entry.index === expectedIndex);
+  if (navigation) {
+    return {
+      index,
+      label: navigation.label,
+      color: cleanColor(key.color, `${label}.color`),
+      assetId: null,
+      action: { type: "navigation", target: navigation.target },
+    };
+  }
   return {
     index,
     label: cleanString(key.label ?? "", `${label}.label`, 32),
@@ -188,13 +199,19 @@ export function createBlankProfile(name = "Main") {
   return {
     id,
     name,
-    keys: Array.from({ length: KEY_COUNT }, (_, offset) => ({
-      index: offset + 1,
-      label: offset < LCD_KEY_COUNT ? `KEY ${offset + 1}` : ["BACK", "HOME", "NEXT"][offset - LCD_KEY_COUNT],
-      color: DEFAULT_KEY_COLORS[offset % DEFAULT_KEY_COLORS.length],
-      assetId: null,
-      action: { type: "none" },
-    })),
+    keys: Array.from({ length: KEY_COUNT }, (_, offset) => {
+      const index = offset + 1;
+      const navigation = PAGE_NAVIGATION_KEYS.find((entry) => entry.index === index);
+      return {
+        index,
+        label: navigation?.label || `KEY ${index}`,
+        color: DEFAULT_KEY_COLORS[offset % DEFAULT_KEY_COLORS.length],
+        assetId: null,
+        action: navigation
+          ? { type: "navigation", target: navigation.target }
+          : { type: "none" },
+      };
+    }),
   };
 }
 

@@ -3,7 +3,7 @@
 ## Physical layout
 
 - Keys 1-15 are 64×64 LCD keys arranged in five columns by three rows.
-- Keys 16-18 are the left, middle, and right non-LCD buttons.
+- Keys 16-18 are the reserved left, middle, and right non-LCD page buttons: previous page, page 1, and next page.
 - Supported IDs: VSDinside `5548:1000`, Mirabox `6603:1009`, and Mirabox EN `6603:1012`.
 - RGB-capable firmware exposes 24 LEDs. No M18 variant has a knob or touch strip.
 
@@ -18,13 +18,13 @@
 
 Configuration writes use the `revision` returned by the latest read. A conflict means another UI or agent saved first; refresh before deciding whether a retry is still correct. Saves are atomic and retain a last-known-good backup.
 
-`dock_status.appliedState` reports the profile revision successfully written to the connected dock and whether it still matches the current active layout. Physical presses execute the last successfully applied action snapshot, not newer unapplied edits. Physical action execution is blocked until one complete profile apply succeeds after each connection, and while an apply is in progress.
+`dock_status.appliedState` reports the page revision successfully written to the connected dock and whether it still matches the current active layout. LCD presses execute the last successfully applied action snapshot, not newer unapplied edits. LCD action execution is blocked until one complete page apply succeeds after each connection, and while an apply is in progress. The reserved navigation buttons remain available after reconnect so they can select and apply a page; they never execute user-defined commands.
 
 ## Mutation boundaries
 
 - `update_key`, `create_profile`, `set_active_profile`, `set_brightness`, and `set_led_color` persist configuration.
 - `apply_profile` writes LCD art and lighting to hardware. It requires the inspected active profile ID and revision, and stops if either changed.
-- `trigger_button` may launch a process or URL. Inspect the key first, pass its exact action plus profile ID and revision, and require explicit user authorization. A changed snapshot stops execution.
+- `trigger_button` may launch a process or URL for LCD keys. Inspect the key first, pass its exact action plus profile ID and revision, and require explicit user authorization. A changed snapshot stops execution. For keys 16-18 it performs only reserved page navigation.
 - `delete_profile` is destructive to stored configuration and requires explicit user authorization.
 - No tool flashes firmware, sends arbitrary HID packets, opens the boot-keyboard interface, or accepts shell command strings.
 

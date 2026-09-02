@@ -96,6 +96,59 @@ test("physical actions are blocked until a profile is fully applied", async (t) 
   assert.equal(actionRunner.actions.length, 0);
 });
 
+test("reserved bottom buttons navigate ordered control pages and home applies page one", async (t) => {
+  const { controller, actionRunner } = await fixture(t);
+  const initial = controller.getState();
+  const firstPageId = initial.config.profiles[0].id;
+  const second = await controller.createProfile({
+    name: "Page Two",
+    expectedRevision: initial.config.revision,
+  });
+  const third = await controller.createProfile({
+    name: "Page Three",
+    expectedRevision: second.config.revision,
+  });
+  await controller.setActiveProfile({
+    profileId: firstPageId,
+    apply: true,
+    expectedRevision: third.config.revision,
+  });
+
+  const next = await controller.triggerButton({ key: 18, source: "hardware" });
+  assert.equal(next.action, "navigation");
+  assert.equal(next.result.navigation, "next");
+  assert.equal(next.result.page, 2);
+  assert.equal(controller.getState().config.activeProfileId, second.profile.id);
+  assert.equal(controller.getState().appliedState.profileId, second.profile.id);
+
+  await controller.triggerButton({ key: 18, source: "hardware" });
+  assert.equal(controller.getState().config.activeProfileId, third.profile.id);
+  await controller.triggerButton({ key: 18, source: "hardware" });
+  assert.equal(controller.getState().config.activeProfileId, firstPageId);
+  await controller.triggerButton({ key: 16, source: "hardware" });
+  assert.equal(controller.getState().config.activeProfileId, third.profile.id);
+
+  const home = await controller.triggerButton({ key: 17, source: "hardware" });
+  assert.equal(home.result.navigation, "first");
+  assert.equal(home.result.page, 1);
+  assert.equal(home.result.pageCount, 3);
+  assert.equal(home.result.application.applied, true);
+  assert.equal(controller.getState().config.activeProfileId, firstPageId);
+  assert.equal(controller.getState().appliedState.profileId, firstPageId);
+  assert.equal(controller.getState().appliedState.inSync, true);
+  assert.equal(actionRunner.actions.length, 0);
+});
+
+test("page navigation can recover the display before any action page is applied", async (t) => {
+  const { controller, actionRunner } = await fixture(t);
+  const home = await controller.triggerButton({ key: 17, source: "hardware" });
+  assert.equal(home.action, "navigation");
+  assert.equal(home.result.page, 1);
+  assert.equal(home.result.application.applied, true);
+  assert.equal(controller.getState().appliedState.inSync, true);
+  assert.equal(actionRunner.actions.length, 0);
+});
+
 test("re-sending unchanged lighting does not rewrite configuration", async (t) => {
   const { controller } = await fixture(t);
   const initial = controller.getState();

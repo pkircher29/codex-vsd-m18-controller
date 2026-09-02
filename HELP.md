@@ -1,6 +1,6 @@
 # M18 Foundry Help
 
-M18 Foundry configures VSDinside and Mirabox M18 Stream Docks from a local browser workspace. It can edit and store profiles, render the 15 LCD keys, control brightness and chassis LEDs, and bind safe direct actions to all 18 physical buttons.
+M18 Foundry configures VSDinside and Mirabox M18 Stream Docks from a local browser workspace. It can edit and store ordered control pages, render each page's 15 LCD keys, control brightness and chassis LEDs, and bind safe direct actions to the LCD controls.
 
 ## First run
 
@@ -18,24 +18,32 @@ The first-run guide has three steps:
 
 1. Review the local-only editing and action-safety model.
 2. Connect the M18 and check whether its vendor HID interface is available.
-3. Name the starter profile and choose whether to apply it now or automatically after future reconnects.
+3. Name the first control page and choose whether to apply it now or automatically after future reconnects.
 
 Choose **Skip for now** to enter the workspace without completing setup. The guide returns on the next browser launch. After setup is complete, choose **Setup guide** in the footer to run it again.
 
 ## Understand the workspace
 
-- **Work sets** are saved profiles. Only one profile is active at a time.
-- **M18 faceplate** previews the 15 LCD keys and three non-display chassis buttons.
+- **Control pages** are ordered saved layouts. Only one page is active at a time.
+- **M18 faceplate** previews the active page's 15 LCD controls and the three reserved page buttons.
 - **Inspector** edits the selected key's label, color, artwork, and action.
 - **Save** writes the configuration to disk without changing the dock.
 - **Apply to M18** saves the current draft, renders all 15 LCD keys, then writes brightness, LED color, and artwork to the connected device.
 - **Update hardware** changes brightness and LED color without rewriting the key images.
 
-Physical button actions use the last profile that completed a full hardware apply. A saved-but-unapplied draft cannot silently run behind older artwork.
+LCD actions use the last page that completed a full hardware apply. A saved-but-unapplied draft cannot silently run behind older artwork.
+
+## Navigate control pages
+
+- Press **Back** (bottom-left) to show the previous page. From page 1, it wraps to the last page.
+- Press **Home** (bottom-center) to return directly to page 1.
+- Press **Next** (bottom-right) to show the next page. From the last page, it wraps to page 1.
+
+Selecting one of these buttons on the browser faceplate previews the destination as a draft. Pressing the physical button changes the saved active page and immediately applies its 15 LCD faces. The bottom buttons are reserved; older command bindings on keys 16-18 are ignored and replaced by navigation.
 
 ## Assign a key
 
-Select a key on the faceplate, then use one of these methods:
+Select an LCD key on the faceplate, then use one of these methods:
 
 - enter a label and choose a face color;
 - upload PNG, JPEG, WebP, or GIF artwork;
@@ -43,7 +51,7 @@ Select a key on the faceplate, then use one of these methods:
 - paste a command and review the parsed executable and argument list; or
 - choose **Design with AI** to generate a draft layout for review.
 
-The bottom three buttons support actions but do not have LCD displays.
+Create or duplicate pages from the **Control pages** rail. Page order in that rail is the order used by Back and Next. An LCD key can also use **Go to page** for a direct jump.
 
 ## Device status and display troubleshooting
 
@@ -89,13 +97,13 @@ Close other dock software, reconnect the unit, and relaunch M18 Foundry. The Win
 
 - Commands are spawned directly with an exact argument array; no shell parses them.
 - URLs must use HTTP or HTTPS.
-- Profile-switch actions can select and apply another saved profile.
+- Go-to-page actions on LCD keys can select and apply another saved page.
 - Testing a command or URL from the browser requires confirmation.
-- Setup and profile application never execute assigned actions.
+- Setup and page application never execute assigned actions.
 
 ## AI-assisted layouts
 
-AI output is always an untrusted draft. Review every label, executable, argument, URL, and profile link before saving or applying it. API keys are used for the current request only. OAuth access tokens remain in the running controller process and are represented in the browser by an opaque local connection ID.
+AI output is always an untrusted draft for the 15 LCD controls; it cannot redefine Back, Home, or Next. Review every label, executable, argument, URL, and page link before saving or applying it. API keys are used for the current request only. OAuth access tokens remain in the running controller process and are represented in the browser by an opaque local connection ID.
 
 Cloud chat subscriptions do not automatically include API access or billing.
 

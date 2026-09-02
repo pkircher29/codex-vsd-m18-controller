@@ -96,6 +96,8 @@ test("MCP stdio server negotiates, lists tools, and reads simulator status", asy
     new Set(triggerTool.inputSchema.required),
     new Set(["profile_id", "key", "expected_revision", "expected_action"]),
   );
+  const updateTool = listed.result.tools.find((tool) => tool.name === "update_key");
+  assert.equal(updateTool.inputSchema.properties.key.maximum, 15);
   const applyTool = listed.result.tools.find((tool) => tool.name === "apply_profile");
   assert.deepEqual(
     new Set(applyTool.inputSchema.required),

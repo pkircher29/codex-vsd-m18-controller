@@ -17,6 +17,14 @@ test("default configuration has a complete 18-key profile", () => {
     config.profiles[0].keys.slice(15).map((key) => key.label),
     ["BACK", "HOME", "NEXT"],
   );
+  assert.deepEqual(
+    config.profiles[0].keys.slice(15).map((key) => key.action),
+    [
+      { type: "navigation", target: "previous" },
+      { type: "navigation", target: "first" },
+      { type: "navigation", target: "next" },
+    ],
+  );
 });
 
 test("legacy configurations infer setup completion without changing the schema version", () => {
@@ -37,6 +45,22 @@ test("configuration validation rejects invalid numeric state and bottom-key art"
   const invalidAsset = createDefaultConfig();
   invalidAsset.profiles[0].keys[15].assetId = `${"a".repeat(64)}.png`;
   assert.throws(() => validateConfig(invalidAsset), /only valid for LCD keys/);
+});
+
+test("legacy bottom-button actions are replaced by reserved page navigation", () => {
+  const legacy = createDefaultConfig();
+  legacy.profiles[0].keys[15].label = "DANGER";
+  legacy.profiles[0].keys[15].action = {
+    type: "command",
+    executable: "/usr/bin/false",
+    args: [],
+  };
+  const validated = validateConfig(legacy);
+  assert.equal(validated.profiles[0].keys[15].label, "BACK");
+  assert.deepEqual(validated.profiles[0].keys[15].action, {
+    type: "navigation",
+    target: "previous",
+  });
 });
 
 test("command arguments preserve exact whitespace and argument boundaries", () => {

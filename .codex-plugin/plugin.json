@@ -1,6 +1,6 @@
 {
   "name": "codex-vsd-m18-controller",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "Configure and safely control VSDinside and Mirabox M18 Stream Docks on Linux or Windows.",
   "author": {
     "name": "Paul Kircher"
@@ -17,7 +17,7 @@
   "interface": {
     "displayName": "VSD M18 Controller",
     "shortDescription": "Configure and control an M18 Stream Dock.",
-    "longDescription": "Inspect Linux or Windows device access, manage 18-key profiles, render LCD artwork, adjust brightness and LEDs, and trigger approved actions through a local MCP server.",
+    "longDescription": "Inspect Linux or Windows device access, manage ordered 15-control pages, navigate them with the three reserved chassis buttons, render LCD artwork, adjust brightness and LEDs, and trigger approved actions through a local MCP server.",
     "developerName": "Paul Kircher",
     "category": "Productivity",
     "capabilities": [
@@ -26,8 +26,8 @@
     ],
     "defaultPrompt": [
       "Inspect my M18 and summarize its current setup.",
-      "Create a safe M18 profile for media controls.",
-      "Update this M18 key and render the profile."
+      "Create a safe M18 control page for media controls.",
+      "Update this M18 key and render the page."
     ],
     "brandColor": "#E59B3A"
   },

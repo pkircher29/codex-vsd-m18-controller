@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1 - 2026-09-02
+
+- Reserve the three lower buttons for previous-page, page-1, and next-page navigation.
+- Treat stored profiles as ordered 15-control pages throughout the workspace and help.
+- Prevent legacy bottom-button commands and AI layouts from replacing page navigation.
+
 ## 0.2.0 - 2026-09-01
 
 - Add a persistent, accessible three-step first-run setup guide.

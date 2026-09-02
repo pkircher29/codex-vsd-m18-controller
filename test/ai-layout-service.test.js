@@ -40,7 +40,7 @@ test("AI model discovery supports Ollama and account-scoped OpenAI models", asyn
   assert.equal(requests[1].options.headers.Authorization, "Bearer test-key");
 });
 
-test("OpenAI-compatible layout generation returns a validated 18-key draft", async () => {
+test("OpenAI-compatible layout generation returns a validated 15-control page with navigation", async () => {
   let requestBody;
   const service = new AiLayoutService({
     fetchImplementation: async (url, options) => {
@@ -66,8 +66,15 @@ test("OpenAI-compatible layout generation returns a validated 18-key draft", asy
     executable: "/usr/bin/playerctl",
     args: ["play-pause"],
   });
+  assert.deepEqual(result.layout.keys.slice(15).map((key) => key.action), [
+    { type: "navigation", target: "previous" },
+    { type: "navigation", target: "first" },
+    { type: "navigation", target: "next" },
+  ]);
+  assert.deepEqual(result.layout.keys.slice(15).map((key) => key.label), ["BACK", "HOME", "NEXT"]);
   assert.equal(requestBody.response_format.type, "json_object");
   assert.match(requestBody.messages[1].content, /never generate shell operators/i);
+  assert.match(requestBody.messages[1].content, /reserved page-navigation buttons/i);
 });
 
 test("OAuth credentials authorize Google Gemini and OpenRouter without exposing browser tokens", async () => {

@@ -8,11 +8,11 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <meta
       name="description"
-      content="Configure, test, and apply profiles for an 18-button VSDinside or Mirabox M18 Stream Dock."
+      content="Configure, test, and apply control pages for an 18-button VSDinside or Mirabox M18 Stream Dock."
     >
     <title>M18 Foundry — Stream Dock setup</title>
-    <link rel="stylesheet" href="/styles.css?v=20260901-setup-wizard">
-    <script src="/app.js?v=20260901-setup-wizard" defer></script>
+    <link rel="stylesheet" href="/styles.css?v=20260902-page-navigation">
+    <script src="/app.js?v=20260902-page-navigation" defer></script>
   </head>
 
   <body>
@@ -102,22 +102,22 @@
         <aside class="profile-rail panel" aria-labelledby="profilesTitle">
           <div class="panel-heading">
             <div>
-              <p class="section-code">A / Profiles</p>
-              <h1 id="profilesTitle" tabindex="-1">Work sets</h1>
+              <p class="section-code">A / Pages</p>
+              <h1 id="profilesTitle" tabindex="-1">Control pages</h1>
             </div>
-            <span class="count-badge" id="profileCount" aria-label="0 profiles">00</span>
+            <span class="count-badge" id="profileCount" aria-label="0 control pages">00</span>
           </div>
 
-          <p class="panel-intro">Select the layout you want to edit and send to the dock.</p>
+          <p class="panel-intro">Each ordered page provides 15 LCD controls. Select one to edit or apply.</p>
 
-          <nav aria-label="Profiles">
+          <nav aria-label="Control pages">
             <ul class="profile-list" id="profileList"></ul>
           </nav>
 
-          <div class="profile-actions" aria-label="Profile actions">
+          <div class="profile-actions" aria-label="Page actions">
             <button class="button button-primary button-block" id="newProfileButton" type="button" data-mutation>
               <svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg>
-              New profile
+              New page
             </button>
             <div class="split-actions">
               <button class="button button-quiet" id="duplicateProfileButton" type="button" data-mutation>
@@ -133,7 +133,7 @@
 
           <div class="rail-footnote">
             <span class="rail-rule" aria-hidden="true"></span>
-            <p><strong>18 inputs</strong><br>15 LCD keys + 3 chassis buttons</p>
+            <p><strong>15 controls per page</strong><br>Back + Home + Next navigation</p>
           </div>
         </aside>
 
@@ -143,7 +143,7 @@
               <p class="section-code">B / Layout bench</p>
               <h1 id="deckTitle">M18 faceplate</h1>
               <p class="active-profile-line">
-                Editing <strong id="activeProfileName">—</strong>
+                Editing page <strong id="activeProfileName">—</strong>
                 <span class="draft-flag" id="draftFlag" hidden>Unsaved</span>
               </p>
             </div>
@@ -173,7 +173,7 @@
 
           <div class="machine-stage">
             <p class="drop-guidance" id="dropGuidance">
-              Drop an app shortcut, command file, web address, or image directly onto any key.
+              Drop an app shortcut, command file, web address, or image onto any LCD key.
             </p>
             <div class="device-shell" aria-label="Interactive M18 button layout">
               <span class="shell-screw shell-screw-tl" aria-hidden="true"></span>
@@ -190,11 +190,11 @@
 
               <div class="hardware-divider" aria-hidden="true">
                 <span></span>
-                <small>Chassis controls</small>
+                <small>Page navigation</small>
                 <span></span>
               </div>
 
-              <div class="hardware-grid" id="hardwareGrid" role="group" aria-label="Hardware buttons 16 through 18"></div>
+              <div class="hardware-grid" id="hardwareGrid" role="group" aria-label="Page navigation: previous page, page 1, and next page"></div>
 
               <div class="device-signature" aria-hidden="true">
                 <span>VSD / MIRABOX</span>
@@ -333,7 +333,7 @@
                   <option value="none">No action</option>
                   <option value="command">Run command</option>
                   <option value="url">Open URL</option>
-                  <option value="profile">Switch profile</option>
+                  <option value="profile">Go to page</option>
                 </select>
               </label>
 
@@ -388,7 +388,7 @@
 
               <div id="profileFields" hidden>
                 <label class="field" for="targetProfile">
-                  <span class="field-label">Target profile</span>
+                  <span class="field-label">Target page</span>
                   <select id="targetProfile" name="targetProfile"></select>
                 </label>
               </div>
@@ -458,14 +458,14 @@
           <div class="modal-copy">
             <p class="section-code">First run / guided setup</p>
             <h2 id="setupWizardTitle">Set up M18 Foundry</h2>
-            <p id="setupWizardDescription">Connect the dock, name the starter profile, and choose when hardware updates happen.</p>
+            <p id="setupWizardDescription">Connect the dock, name the first control page, and choose when hardware updates happen.</p>
           </div>
         </div>
 
         <ol class="setup-progress" aria-label="Setup progress">
           <li data-setup-progress="1"><span>01</span> Start</li>
           <li data-setup-progress="2"><span>02</span> Device</li>
-          <li data-setup-progress="3"><span>03</span> Profile</li>
+          <li data-setup-progress="3"><span>03</span> Page</li>
         </ol>
 
         <section class="setup-step" data-setup-step="1" aria-labelledby="setupWelcomeTitle">
@@ -498,9 +498,9 @@
 
         <section class="setup-step" data-setup-step="3" aria-labelledby="setupProfileTitle" hidden>
           <p class="section-code">Step 3 of 3</p>
-          <h3 id="setupProfileTitle">Prepare the first profile</h3>
+          <h3 id="setupProfileTitle">Prepare the first page</h3>
           <label class="field" for="setupProfileName">
-            <span class="field-label">Profile name</span>
+            <span class="field-label">Page name</span>
             <input id="setupProfileName" name="setupProfileName" type="text" maxlength="64" required autocomplete="off">
             <span class="field-hint">You can add, duplicate, or rename key assignments later.</span>
           </label>
@@ -531,12 +531,12 @@
       <form method="dialog" id="profileDialogForm">
         <div class="modal-index" aria-hidden="true">PF</div>
         <div class="modal-copy">
-          <p class="section-code">Profile operation</p>
-          <h2 id="profileDialogTitle">Create profile</h2>
-          <p id="profileDialogDescription">Start with a clean 18-button layout.</p>
+          <p class="section-code">Page operation</p>
+          <h2 id="profileDialogTitle">Create page</h2>
+          <p id="profileDialogDescription">Start with a clean 15-control page.</p>
         </div>
         <label class="field" for="profileName">
-          <span class="field-label">Profile name</span>
+          <span class="field-label">Page name</span>
           <input id="profileName" name="profileName" type="text" maxlength="64" required autocomplete="off">
           <span class="field-hint">1–64 characters</span>
         </label>
@@ -615,7 +615,7 @@
                 <input id="aiGoogleProjectId" type="text" autocomplete="off" spellcheck="false" aria-describedby="aiOauthHint">
               </label>
             </div>
-            <p class="field-hint" id="aiOauthHint">Sign in opens in your browser. OAuth credentials remain in the running local controller and are never added to an M18 profile.</p>
+            <p class="field-hint" id="aiOauthHint">Sign in opens in your browser. OAuth credentials remain in the running local controller and are never added to an M18 page.</p>
           </section>
 
           <div class="field model-field">
@@ -643,7 +643,7 @@
         <fieldset class="field ai-scope">
           <legend class="field-label">Change scope</legend>
           <label><input type="radio" name="aiScope" value="empty" checked> Fill unassigned keys</label>
-          <label><input type="radio" name="aiScope" value="all"> Redesign all 18 keys</label>
+          <label><input type="radio" name="aiScope" value="all"> Redesign all 15 controls</label>
         </fieldset>
 
         <p class="ai-boundary" id="aiBoundary"><strong>API access:</strong> cloud chat subscriptions and API billing are separate. Generated commands are never run from this dialog; review them before saving or applying.</p>

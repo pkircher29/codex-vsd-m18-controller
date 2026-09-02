@@ -4,7 +4,7 @@ import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as z from "zod/v4";
-import { APP_VERSION, KEY_COUNT } from "./constants.js";
+import { APP_VERSION, KEY_COUNT, LCD_KEY_COUNT } from "./constants.js";
 import { ServiceClient } from "./service-client.js";
 import { errorMessage } from "./util.js";
 
@@ -15,7 +15,7 @@ const httpUrlSchema = z.string().url().refine((value) => {
   return protocol === "http:" || protocol === "https:";
 }, "URL must use HTTP or HTTPS");
 
-const actionSchema = z.discriminatedUnion("type", [
+const assignableActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("none") }),
   z.object({
     type: z.literal("command"),
@@ -26,22 +26,29 @@ const actionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("profile"), profileId: safeIdSchema }),
 ]);
 
+const triggerActionSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("none") }),
+  z.object({
+    type: z.literal("command"),
+    executable: z.string().min(1).max(1024),
+    args: z.array(z.string().max(2048)).max(64).default([]),
+  }),
+  z.object({ type: z.literal("url"), url: httpUrlSchema }),
+  z.object({ type: z.literal("profile"), profileId: safeIdSchema }),
+  z.object({
+    type: z.literal("navigation"),
+    target: z.enum(["previous", "first", "next"]),
+  }),
+]);
+
 const updateKeySchema = z.object({
   profile_id: safeIdSchema,
-  key: z.number().int().min(1).max(KEY_COUNT),
+  key: z.number().int().min(1).max(LCD_KEY_COUNT),
   expected_revision: z.number().int().nonnegative(),
   label: z.string().max(32).optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   asset_id: assetIdSchema.nullable().optional(),
-  action: actionSchema.optional(),
-}).superRefine((value, context) => {
-  if (value.key > 15 && value.asset_id) {
-    context.addIssue({
-      code: "custom",
-      path: ["asset_id"],
-      message: "Artwork is available only for LCD keys 1 through 15",
-    });
-  }
+  action: assignableActionSchema.optional(),
 });
 
 function toolResult(value) {
@@ -77,7 +84,7 @@ export function createM18McpServer({ client = new ServiceClient() } = {}) {
     { name: "vsd-m18-controller", version: APP_VERSION },
     {
       instructions:
-        "Inspect dock_status before mutating configuration. Configuration writes use optimistic revisions. update_key saves configuration but apply_profile is the explicit hardware-display commit. Bind apply and trigger calls to the inspected profile and revision, and include the exact inspected action when triggering. Never trigger a command or URL unless the user explicitly asked to execute that action.",
+        "Inspect dock_status before mutating configuration. Stored profiles are ordered control pages. Keys 16-18 are reserved for previous, first-page, and next-page navigation. Configuration writes use optimistic revisions. update_key saves LCD controls but apply_profile is the explicit hardware-display commit. Bind apply and trigger calls to the inspected profile and revision, and include the exact inspected action when triggering. Never trigger a command or URL unless the user explicitly asked to execute that action.",
     },
   );
 
@@ -85,7 +92,7 @@ export function createM18McpServer({ client = new ServiceClient() } = {}) {
     "dock_status",
     {
       title: "Inspect M18 status",
-      description: "Read connection, permission, operation, active profile, and configuration revision state.",
+      description: "Read connection, permission, operation, active control page, and configuration revision state.",
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     },
@@ -109,8 +116,8 @@ export function createM18McpServer({ client = new ServiceClient() } = {}) {
   server.registerTool(
     "list_profiles",
     {
-      title: "List M18 profiles",
-      description: "List profile IDs, names, active state, and the current configuration revision.",
+      title: "List M18 control pages",
+      description: "List ordered page IDs, names, active state, and the current configuration revision.",
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     },
@@ -214,9 +221,9 @@ export function createM18McpServer({ client = new ServiceClient() } = {}) {
   server.registerTool(
     "update_key",
     {
-      title: "Configure an M18 key",
+      title: "Configure an M18 LCD key",
       description:
-        "Update one key in stored configuration. This does not execute the action or change hardware artwork until apply_profile is called.",
+        "Update one LCD control on keys 1-15. Keys 16-18 are reserved for page navigation. This does not execute the action or change hardware artwork until apply_profile is called.",
       inputSchema: updateKeySchema,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
@@ -279,9 +286,9 @@ export function createM18McpServer({ client = new ServiceClient() } = {}) {
   server.registerTool(
     "apply_profile",
     {
-      title: "Render the active profile",
+      title: "Render the active control page",
       description:
-        "Render the inspected active profile's 15 LCD key images, brightness, and LED color. The operation stops if its profile or revision changed.",
+        "Render the inspected active page's 15 LCD key images, brightness, and LED color. The operation stops if its profile ID or revision changed.",
       inputSchema: z.object({
         profile_id: safeIdSchema,
         expected_revision: z.number().int().nonnegative(),
@@ -303,12 +310,12 @@ export function createM18McpServer({ client = new ServiceClient() } = {}) {
     {
       title: "Trigger a configured M18 button",
       description:
-        "Execute one configured key action. Command and URL actions require confirm=true after explicit user approval.",
+        "Execute one configured LCD action, or use keys 16-18 for reserved previous, first-page, and next-page navigation. Command and URL actions require confirm=true after explicit user approval.",
       inputSchema: z.object({
         profile_id: safeIdSchema,
         key: z.number().int().min(1).max(KEY_COUNT),
         expected_revision: z.number().int().nonnegative(),
-        expected_action: actionSchema,
+        expected_action: triggerActionSchema,
         confirm: z.boolean().default(false),
       }),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },

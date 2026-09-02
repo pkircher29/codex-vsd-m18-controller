@@ -3,7 +3,7 @@ import { AssetStore } from "./asset-store.js";
 import { ActionRunner } from "./action-runner.js";
 import { cloneProfile, createBlankProfile, validateConfig } from "./config-schema.js";
 import { ConfigStore, RevisionConflictError } from "./config-store.js";
-import { LCD_KEY_COUNT } from "./constants.js";
+import { LCD_KEY_COUNT, PAGE_NAVIGATION_KEYS } from "./constants.js";
 import { DeviceManager } from "./device/device-manager.js";
 import { renderKeyJpeg } from "./device/protocol.js";
 import { runtimeInfo } from "./platform.js";
@@ -25,6 +25,17 @@ function hardwareStateFingerprint(config, profile) {
     brightness: config.device.brightness,
     ledColor: config.device.ledColor,
   });
+}
+
+function navigationForKey(key) {
+  return PAGE_NAVIGATION_KEYS.find((entry) => entry.index === key) || null;
+}
+
+function pageIndexForNavigation(profiles, currentProfileId, target) {
+  const currentIndex = Math.max(0, profiles.findIndex((profile) => profile.id === currentProfileId));
+  if (target === "first") return 0;
+  if (target === "previous") return (currentIndex - 1 + profiles.length) % profiles.length;
+  return (currentIndex + 1) % profiles.length;
 }
 
 export class Controller extends EventEmitter {
@@ -282,14 +293,15 @@ export class Controller extends EventEmitter {
     expectedAction = null,
   }) {
     const config = this.configStore.get();
+    const navigation = navigationForKey(key);
     if (source === "hardware" && this.operation?.state === "working") {
       throw domainError(409, "The M18 layout is still being applied; the button press was ignored");
     }
-    if (source === "hardware" && !this.#appliedSnapshot) {
+    if (source === "hardware" && !this.#appliedSnapshot && !navigation) {
       throw domainError(409, "Apply a profile before physical M18 buttons can run actions");
     }
     const profile = source === "hardware"
-      ? this.#appliedSnapshot.profile
+      ? this.#appliedSnapshot?.profile || config.profiles.find((entry) => entry.id === config.activeProfileId)
       : config.profiles.find((entry) => entry.id === config.activeProfileId);
     const button = profile?.keys[key - 1];
     if (!button) throw new RangeError("M18 key index must be between 1 and 18");
@@ -317,7 +329,12 @@ export class Controller extends EventEmitter {
       );
     }
     let result;
-    if (action.type === "profile") {
+    if (action.type === "navigation") {
+      result = await this.#navigatePage({
+        target: action.target,
+        fromProfileId: profile.id,
+      });
+    } else if (action.type === "profile") {
       const current = this.configStore.get();
       const switched = await this.setActiveProfile({
         profileId: action.profileId,
@@ -344,6 +361,45 @@ export class Controller extends EventEmitter {
     };
     this.#emitState();
     return this.lastEvent;
+  }
+
+  async #navigatePage({ target, fromProfileId }) {
+    const current = this.configStore.get();
+    const targetIndex = pageIndexForNavigation(current.profiles, fromProfileId, target);
+    const targetProfile = current.profiles[targetIndex];
+    let application = { requested: Boolean(this.deviceManager.adapter), applied: false };
+
+    if (targetProfile.id === current.activeProfileId) {
+      if (this.deviceManager.adapter) {
+        try {
+          application.result = await this.applyActiveProfile({
+            expectedProfileId: targetProfile.id,
+            expectedRevision: current.revision,
+          });
+          application.applied = true;
+        } catch (error) {
+          application.error = errorMessage(error);
+        }
+      }
+    } else {
+      const switched = await this.setActiveProfile({
+        profileId: targetProfile.id,
+        apply: Boolean(this.deviceManager.adapter),
+        expectedRevision: current.revision,
+      });
+      application = switched.application;
+    }
+
+    return {
+      executed: true,
+      type: "navigation",
+      navigation: target,
+      fromProfileId,
+      profileId: targetProfile.id,
+      page: targetIndex + 1,
+      pageCount: current.profiles.length,
+      application,
+    };
   }
 
   simulatePress({ key, confirm = false, expectedProfileId, expectedRevision, expectedAction }) {

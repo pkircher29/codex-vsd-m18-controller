@@ -1,3 +1,5 @@
+import { PAGE_NAVIGATION_KEYS } from "./constants.js";
+
 const PROVIDERS = new Set(["ollama", "openrouter", "openai", "anthropic", "gemini", "openai-compatible"]);
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 const MAX_PROMPT_LENGTH = 12_000;
@@ -202,6 +204,8 @@ function extractJson(text) {
 }
 
 function cleanAction(raw, index) {
+  const navigation = PAGE_NAVIGATION_KEYS.find((entry) => entry.index === index);
+  if (navigation) return { type: "navigation", target: navigation.target };
   const action = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
   const type = new Set(["none", "command", "url"]).has(action.type) ? action.type : "none";
   if (type === "none") return { type: "none" };
@@ -258,7 +262,8 @@ export function validateAiLayout(raw) {
       throw serviceError("AI layout key indexes must be unique numbers from 1 through 18");
     }
     seen.add(index);
-    const label = optionalText(entry.label, 32);
+    const navigation = PAGE_NAVIGATION_KEYS.find((item) => item.index === index);
+    const label = navigation?.label || optionalText(entry.label, 32);
     const color = optionalText(entry.color, 7).toUpperCase();
     if (!HEX_COLOR.test(color)) throw serviceError(`AI layout key ${index} has an invalid color`);
     return { index, label, color, action: cleanAction(entry.action, index) };
@@ -276,17 +281,20 @@ function currentLayout(profile) {
     index: Number(key.index),
     label: typeof key.label === "string" ? key.label.slice(0, 32) : "",
     color: HEX_COLOR.test(key.color || "") ? key.color.toUpperCase() : "#6F6252",
-    action: key.action && typeof key.action === "object" ? key.action : { type: "none" },
+    action: Number(key.index) > 15
+      ? { type: "none" }
+      : key.action && typeof key.action === "object" ? key.action : { type: "none" },
   }));
 }
 
 function layoutInstructions({ prompt, profile, platform, scope }) {
   const existing = currentLayout(profile);
-  const mode = scope === "empty" ? "Keep every already-assigned key unchanged and redesign only keys whose action is none." : "Redesign all 18 keys.";
+  const mode = scope === "empty" ? "Keep every already-assigned LCD key unchanged and redesign only LCD keys whose action is none." : "Redesign the 15 LCD control keys.";
   return [
-    "Design one practical M18 stream-dock profile from the user's request.",
-    "The dock has LCD keys 1-15 and non-display chassis buttons 16-18.",
+    "Design one practical M18 stream-dock control page from the user's request.",
+    "The dock has LCD control keys 1-15 and reserved page-navigation buttons 16-18.",
     "Return exactly 18 unique key entries in numeric order.",
+    "Keys 16, 17, and 18 must be labeled BACK, HOME, and NEXT with action type none; the controller assigns their navigation behavior.",
     "Labels should be short, recognizable, and at most 16 characters. Use varied high-contrast hex colors.",
     "Allowed actions are none, command, or url. A command is a direct executable plus an exact argument array; it does not run through a shell.",
     "Never generate shell operators, pipes, redirects, command substitution, sudo, package installation, deletion, disk formatting, shutdown, credential access, or privilege escalation.",

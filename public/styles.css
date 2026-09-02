@@ -1098,6 +1098,36 @@ progress::-moz-progress-bar { background: var(--amber-300); }
   transform: translateY(-50%) rotate(45deg);
 }
 
+.page-navigation-key {
+  border-color: #a9a89d;
+}
+
+.page-navigation-key .key-label {
+  letter-spacing: 0.08em;
+}
+
+.page-navigation-key .key-action-mark {
+  width: 0.45rem;
+  height: 0.45rem;
+  background: transparent;
+  border-top: 2px solid currentColor;
+  border-right: 2px solid currentColor;
+}
+
+.page-navigation-key[data-navigation="previous"] .key-action-mark {
+  transform: translateY(-50%) rotate(-135deg);
+}
+
+.page-navigation-key[data-navigation="first"] .key-action-mark {
+  background: currentColor;
+  border: 0;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.page-navigation-key[data-navigation="next"] .key-action-mark {
+  transform: translateY(-50%) rotate(45deg);
+}
+
 .device-signature {
   margin-top: 1rem;
   padding-top: 0.7rem;

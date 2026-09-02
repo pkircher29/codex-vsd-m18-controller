@@ -60,7 +60,7 @@ test("server publishes, protects, and clears a dynamic local instance", async (t
 
   const headers = { "X-VSD-Instance-Token": descriptor.token };
   const health = await fetch(`${baseUrl}/api/health`, { headers }).then((response) => response.json());
-  assert.deepEqual(health, { ok: true, version: "0.2.0", pid: descriptor.pid });
+  assert.deepEqual(health, { ok: true, version: "0.2.1", pid: descriptor.pid });
 
   const state = await fetch(`${baseUrl}/api/state`, { headers }).then((response) => response.json());
   assert.equal(state.device.state, "connected");
