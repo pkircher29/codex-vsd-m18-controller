@@ -72,6 +72,10 @@ export class DeviceManager extends EventEmitter {
 
   async scan() {
     if (this.#stopped) return;
+    if (this.#mode === "mock") {
+      if (!this.#adapter) await this.#attach(new MockM18Adapter());
+      return;
+    }
     if (this.#scanPromise) return this.#scanPromise;
     this.#scanPromise = this.#scanRealDevices().finally(() => {
       this.#scanPromise = null;
