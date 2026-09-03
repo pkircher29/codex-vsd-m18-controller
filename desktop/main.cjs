@@ -135,7 +135,7 @@ async function startControllerProcess() {
   const serverArguments = ["--headless"];
   if (process.argv.includes("--mock")) serverArguments.push("--mock");
   const child = fork(serverEntry, serverArguments, {
-    cwd: path.join(__dirname, ".."),
+    cwd: app.getPath("userData"),
     execPath: process.execPath,
     env: {
       ...process.env,
@@ -207,6 +207,7 @@ if (!hasSingleInstanceLock) {
     });
     await startDesktop();
   }).catch((error) => {
+    console.error("M18 Foundry could not start:", error);
     dialog.showErrorBox("M18 Foundry could not start", error?.message || String(error));
     app.quit();
   });

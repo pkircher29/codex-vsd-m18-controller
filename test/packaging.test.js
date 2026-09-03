@@ -32,6 +32,12 @@ test("desktop renderer remains isolated from Node and Electron privileges", asyn
   assert.match(main, /fork\(serverEntry/);
 });
 
+test("packaged controller child uses a real per-user working directory", async () => {
+  const main = await readFile(projectFile("desktop/main.cjs"), "utf8");
+  assert.match(main, /cwd:\s*app\.getPath\("userData"\)/);
+  assert.doesNotMatch(main, /cwd:\s*path\.join\(__dirname,\s*"\.\."\)/);
+});
+
 test("release workflow builds both platforms and publishes checksums", async () => {
   const workflow = await readFile(projectFile(".github/workflows/release.yml"), "utf8");
   assert.match(workflow, /windows-latest/);

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { APP_VERSION } from "../src/constants.js";
 
 const serverEntry = fileURLToPath(new URL("../src/server.js", import.meta.url));
 
@@ -60,7 +61,7 @@ test("server publishes, protects, and clears a dynamic local instance", async (t
 
   const headers = { "X-VSD-Instance-Token": descriptor.token };
   const health = await fetch(`${baseUrl}/api/health`, { headers }).then((response) => response.json());
-  assert.deepEqual(health, { ok: true, version: "0.1.0", pid: descriptor.pid });
+  assert.deepEqual(health, { ok: true, version: APP_VERSION, pid: descriptor.pid });
 
   const state = await fetch(`${baseUrl}/api/state`, { headers }).then((response) => response.json());
   assert.equal(state.device.state, "connected");
