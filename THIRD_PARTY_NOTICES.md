@@ -4,12 +4,13 @@ M18 Foundry is an independent implementation. No firmware or proprietary vendor 
 
 ## Runtime dependencies
 
+- Electron 44.1.1 — MIT License — <https://github.com/electron/electron>
 - `@modelcontextprotocol/server` 2.0.0 — MIT License — <https://github.com/modelcontextprotocol/typescript-sdk>
 - `node-hid` 3.4.0 — BSD-3-Clause License — <https://github.com/node-hid/node-hid>
 - `sharp` 0.35.4 — Apache-2.0 License — <https://github.com/lovell/sharp>
 - `zod` 4.4.3 — MIT License — <https://github.com/colinhacks/zod>
 
-Their complete license texts are distributed in their npm packages and source repositories.
+Their complete license texts are distributed in their npm packages and source repositories. Packaged desktop builds also include Electron's `LICENSE.electron.txt` and Chromium's `LICENSES.chromium.html` notices beside the application runtime.
 
 ## Protocol references
 

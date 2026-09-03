@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { Controller } from "./controller.js";
 import { APP_VERSION, DEFAULT_HOST, DEFAULT_PORT } from "./constants.js";
 import { ControllerHttpServer } from "./http-server.js";
@@ -15,8 +17,8 @@ function hasFlag(flag) {
   return process.argv.includes(flag);
 }
 
-async function openBrowser(url) {
-  if (hasFlag("--headless") || process.env.VSD_M18_NO_BROWSER === "1") return;
+async function openBrowser(url, { headless = hasFlag("--headless") } = {}) {
+  if (headless || process.env.VSD_M18_NO_BROWSER === "1") return;
   await openExternal(url).catch(() => undefined);
 }
 
@@ -34,8 +36,13 @@ async function existingService(descriptor) {
   }
 }
 
-async function main() {
-  if (hasFlag("--mock")) process.env.VSD_M18_MODE = "mock";
+export async function startControllerServer({
+  mock = hasFlag("--mock"),
+  headless = hasFlag("--headless"),
+  exitAfterReady = hasFlag("--exit-after-ready"),
+  manageProcessSignals = true,
+} = {}) {
+  if (mock) process.env.VSD_M18_MODE = "mock";
   const host = process.env.VSD_M18_HOST || DEFAULT_HOST;
   const port = parseInteger(process.env.VSD_M18_PORT, DEFAULT_PORT);
   if (!new Set(["127.0.0.1", "localhost", "::1"]).has(host)) {
@@ -46,8 +53,12 @@ async function main() {
     descriptor?.host === host && (port === 0 || descriptor.port === port);
   if (matchesRequestedAddress(existing) && await existingService(existing)) {
     console.error(`M18 Foundry is already running at ${instanceBaseUrl(existing)}`);
-    await openBrowser(instanceUiUrl(existing));
-    return;
+    await openBrowser(instanceUiUrl(existing), { headless });
+    return {
+      descriptor: existing,
+      reused: true,
+      stop: async () => undefined,
+    };
   }
 
   const session = new InstanceSession();
@@ -57,8 +68,12 @@ async function main() {
       existing = await readInstanceDescriptor();
       if (matchesRequestedAddress(existing) && await existingService(existing)) {
         console.error(`M18 Foundry is already running at ${instanceBaseUrl(existing)}`);
-        await openBrowser(instanceUiUrl(existing));
-        return;
+        await openBrowser(instanceUiUrl(existing), { headless });
+        return {
+          descriptor: existing,
+          reused: true,
+          stop: async () => undefined,
+        };
       }
     }
     throw new Error("Another M18 Foundry process is starting for this user");
@@ -70,20 +85,33 @@ async function main() {
     instanceToken: session.token,
   });
   let stopping = false;
+  let onSigint;
+  let onSigterm;
+  let onMessage;
   const stop = async (signal) => {
     if (stopping) return;
     stopping = true;
     console.error(`Stopping M18 Foundry (${signal})…`);
+    if (manageProcessSignals) {
+      process.off("SIGINT", onSigint);
+      process.off("SIGTERM", onSigterm);
+      process.off("message", onMessage);
+    }
     await server.close().catch(() => undefined);
     await controller.stop().catch(() => undefined);
     await session.clear().catch(() => undefined);
   };
-  process.once("SIGINT", () => stop("SIGINT").finally(() => process.exit(0)));
-  process.once("SIGTERM", () => stop("SIGTERM").finally(() => process.exit(0)));
-  process.on("message", (message) => {
+  onSigint = () => stop("SIGINT").finally(() => process.exit(0));
+  onSigterm = () => stop("SIGTERM").finally(() => process.exit(0));
+  onMessage = (message) => {
     if (message?.type !== "vsd-m18:shutdown") return;
     stop("parent request").finally(() => process.exit(0));
-  });
+  };
+  if (manageProcessSignals) {
+    process.once("SIGINT", onSigint);
+    process.once("SIGTERM", onSigterm);
+    process.on("message", onMessage);
+  }
 
   try {
     await controller.initialize();
@@ -92,18 +120,25 @@ async function main() {
     console.error(
       `M18 Foundry ${process.env.VSD_M18_MODE === "mock" ? "simulator " : ""}is ready at ${instanceBaseUrl(descriptor)}`,
     );
-    await openBrowser(instanceUiUrl(descriptor));
-    if (hasFlag("--exit-after-ready")) {
+    await openBrowser(instanceUiUrl(descriptor), { headless });
+    if (exitAfterReady) {
       await sleep(50);
       await stop("verification");
     }
+    return { descriptor, reused: false, stop };
   } catch (error) {
     await stop("startup failure");
     throw error;
   }
 }
 
-main().catch((error) => {
-  console.error(`M18 Foundry could not start: ${errorMessage(error)}`);
-  process.exitCode = 1;
-});
+const directEntry = process.argv[1]
+  ? pathToFileURL(resolve(process.argv[1])).href
+  : null;
+
+if (directEntry === import.meta.url) {
+  startControllerServer().catch((error) => {
+    console.error(`M18 Foundry could not start: ${errorMessage(error)}`);
+    process.exitCode = 1;
+  });
+}

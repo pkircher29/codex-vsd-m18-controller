@@ -22,6 +22,16 @@ Each page contains 15 LCD controls with labels or uploaded artwork. The three lo
 
 Cloud chat subscriptions do not automatically provide API access. OpenRouter sign-in uses OpenRouter credits or BYOK settings, Google sign-in uses Gemini API quota and billing for the chosen Cloud project, and the direct OpenAI and Anthropic APIs still require their documented API credentials. AI output is treated as untrusted draft data: commands are constrained to direct executable/argument actions, validated locally, previewed before acceptance, and never executed by the generation flow.
 
+## Download and install
+
+Download the current files from the [GitHub Releases page](https://github.com/pkircher29/codex-vsd-m18-controller/releases/latest):
+
+- **Windows 10/11 x64:** run `M18-Foundry-<version>-Windows-x64-Setup.exe`. The per-user NSIS installer includes the runtime and creates Start Menu and desktop shortcuts.
+- **Debian/Ubuntu x64:** install `M18-Foundry-<version>-Linux-amd64.deb` with your graphical package manager or `sudo apt install ./M18-Foundry-<version>-Linux-amd64.deb`. The package installs the device-specific udev rule; reconnect the M18 once afterward.
+- **Other x64 Linux distributions:** make `M18-Foundry-<version>-Linux-x86_64.AppImage` executable and run it. The AppImage is portable and may require your distribution's FUSE 2 compatibility package. Install [`linux/40-vsd-m18.rules`](./linux/40-vsd-m18.rules) through your distribution's udev configuration before using physical hardware.
+
+The packaged desktop application contains its own Electron/Node runtime. Node.js and npm are needed only for source installations and development. Release files are currently unsigned; verify the matching entry in `SHA256SUMS.txt` before running a download.
+
 ## Try it safely
 
 Node.js 20.9.0 or newer is required.
@@ -36,7 +46,7 @@ The demo opens the complete application against an in-memory M18 simulator. It d
 
 The first-run guide appears for a fresh configuration. Choose **Skip for now** to explore without completing it, or finish the guide to save the first page name and optional auto-apply preference. You can reopen it later with **Setup guide** in the workspace footer.
 
-## Linux installation
+## Linux source installation
 
 ```bash
 cd codex-vsd-m18-controller
@@ -58,7 +68,7 @@ To run without installing the service:
 npm start
 ```
 
-## Windows installation
+## Windows source installation
 
 Windows 10 or 11 and Windows PowerShell 5.1 or newer are supported. From a PowerShell prompt in the project directory:
 
@@ -117,7 +127,11 @@ Protocol compatibility was independently implemented from the [official Mirabox 
 npm run check
 npm test
 npm run verify
+npm run desktop:mock
+npm run package:linux
 ```
+
+Packaging requires Node.js 22.12.0 or newer. Tagged releases are built on native GitHub-hosted Windows and Linux runners. The workflow verifies the source, builds the NSIS, AppImage, and Debian targets, generates SHA-256 checksums, and attaches all artifacts to the matching GitHub release.
 
 Tests cover exact packet framing and key mapping, reserved page navigation, native image rendering, serialized HID writes, configuration validation and recovery, simulator application, action confirmation, loopback API protections, and a real MCP initialize/list/call exchange.
 

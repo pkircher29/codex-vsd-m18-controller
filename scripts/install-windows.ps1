@@ -161,7 +161,7 @@ function Invoke-NpmCleanInstall {
   Write-Host "Installing locked npm dependencies..."
   Push-Location -LiteralPath $Prefix
   try {
-    & $NpmPath ci --no-audit --no-fund
+    & $NpmPath ci --omit=dev --no-audit --no-fund
     if ($LASTEXITCODE -ne 0) {
       throw "npm ci failed with exit code $LASTEXITCODE."
     }

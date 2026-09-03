@@ -4,7 +4,9 @@ M18 Foundry configures VSDinside and Mirabox M18 Stream Docks from a local brows
 
 ## First run
 
-Open M18 Foundry from the application menu or run one of these commands from the repository:
+Install the Windows setup executable or Linux Debian package from the GitHub release, then open **M18 Foundry** from the application menu. The packaged application includes its runtime. The Linux AppImage can be run directly after making it executable, but its user must install the included device-specific udev rule before controlling physical hardware.
+
+For a source checkout, run one of these commands:
 
 ```bash
 npm start
@@ -87,7 +89,7 @@ The installer adds a device-specific udev rule with desktop-seat access. It does
 
 5. Close any second process using the dock and reconnect it.
 
-M18 Foundry v0.2.0 and later emit baseline 64x64 JFIF JPEGs. Earlier progressive JPEG output could be accepted by USB while still being rejected by the dock's embedded display decoder.
+M18 Foundry release builds emit baseline 64x64 JFIF JPEGs. Progressive JPEG output can be accepted by USB while still being rejected by the dock's embedded display decoder.
 
 ### Windows cannot open the dock
 

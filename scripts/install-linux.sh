@@ -13,7 +13,7 @@ if [[ ! -f "$project_root/package-lock.json" ]]; then
   exit 1
 fi
 
-npm --prefix "$project_root" ci --no-audit --no-fund
+npm --prefix "$project_root" ci --omit=dev --no-audit --no-fund
 
 echo "Installing the least-privilege M18 udev rule (sudo is required once)."
 sudo install -o root -g root -m 0644 "$rule_source" "$rule_target"

@@ -1,6 +1,8 @@
 # Windows installation
 
-M18 Foundry can be installed for the current Windows user without Administrator privileges. Windows 10 or 11, Windows PowerShell 5.1 or newer, and Node.js 20.9.0 or newer are required.
+For normal installation, download the x64 setup executable from the [GitHub Releases page](https://github.com/pkircher29/codex-vsd-m18-controller/releases/latest). The NSIS installer includes the application runtime, installs for the current Windows user, and creates Start Menu and desktop shortcuts. It does not require Node.js or npm. The release is currently unsigned, so verify its SHA-256 value against `SHA256SUMS.txt` before running it.
+
+The PowerShell workflow below remains available for source checkouts. It requires Windows 10 or 11, Windows PowerShell 5.1 or newer, and Node.js 20.9.0 or newer.
 
 From a PowerShell prompt in the project directory, run:
 
@@ -8,7 +10,7 @@ From a PowerShell prompt in the project directory, run:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1
 ```
 
-The installer copies the runtime to `%LOCALAPPDATA%\Programs\M18Foundry`, runs `npm ci` against the lockfile, and creates a **M18 Foundry** Start Menu shortcut. Installation does not require elevation, install a device driver, or start the controller automatically.
+The source installer copies the runtime to `%LOCALAPPDATA%\Programs\M18Foundry`, runs `npm ci --omit=dev` against the lockfile, and creates a **M18 Foundry** Start Menu shortcut. Installation does not require elevation, install a device driver, or start the controller automatically.
 
 Useful options:
 

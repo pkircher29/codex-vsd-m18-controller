@@ -1,6 +1,6 @@
 # M18 Foundry Product and Technical Specification
 
-Version: 0.2.1
+Version: 0.1.0
 Status: release specification
 
 ## 1. Purpose
@@ -145,7 +145,7 @@ The browser workspace targets WCAG 2.2 Level AA. The setup dialog uses native di
 
 ## 9. Release acceptance criteria
 
-A tagged v0.2.1 build is acceptable when:
+A tagged v0.1.0 build is acceptable when:
 
 - syntax checks pass;
 - all automated tests pass;
@@ -161,7 +161,11 @@ A tagged v0.2.1 build is acceptable when:
 - a navigation press after reconnect can apply a page before ordinary LCD actions are enabled;
 - no prior bottom-button command reaches the action runner;
 - a supported physical M18 can be opened and accepts a complete profile application; and
-- the release commit is tagged `v0.2.1` only after verification.
+- native Windows x64 and Linux x64 runners build an NSIS installer, AppImage, and Debian package;
+- packaged renderers keep Node integration disabled, context isolation enabled, and the Chromium sandbox enabled;
+- the Debian package installs only the exact supported-device udev rule;
+- release artifacts include SHA-256 checksums; and
+- the release commit is tagged `v0.1.0` only after verification.
 
 ## 10. Non-goals
 

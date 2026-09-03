@@ -3,7 +3,7 @@ import { readdir } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 
-const roots = ["src", "public", "scripts", "test"];
+const roots = ["desktop", "src", "public", "scripts", "test"];
 
 async function javascriptFiles(path) {
   let entries;
@@ -17,7 +17,7 @@ async function javascriptFiles(path) {
   for (const entry of entries) {
     const child = join(path, entry.name);
     if (entry.isDirectory()) files.push(...(await javascriptFiles(child)));
-    else if (extname(entry.name) === ".js") files.push(child);
+    else if (new Set([".cjs", ".js", ".mjs"]).has(extname(entry.name))) files.push(child);
   }
   return files;
 }
